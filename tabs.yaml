@@ -1,0 +1,5 @@
+person:
+	name: Ingy
+	likes:
+		- Go
+		- YAML

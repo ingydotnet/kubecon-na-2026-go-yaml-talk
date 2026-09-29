@@ -1,0 +1,188 @@
+#!/usr/bin/env ys-0
+
+use: ipc
+
+# Render FIGlet fonts directly, using their horizontal layout rules.
+defn main(*):
+  font words =: get-options(ARGV)
+  font =: load-font(font)
+  text =: words.?.if(words:joins stdin-text())
+  color =: stdout-tty?()
+  columns =: terminal-columns(color)
+  escape =: char(27)
+  each line text.?.if(text:lines []):
+    rows =: render(line font)
+    width =: max(0 rows.map(count)*)
+    padding =: max(0 ((columns - width) // 2))
+    total =: max(width columns)
+    each row rows:
+      right =: total - (padding + row.#)
+      output =: (padding * ' ') + row + (right * ' ')
+      say: color.if("$escape[1;93m$output$escape[0m" output)
+
+defn stdin-text():
+  repeatedly(readline): .take-while(some?):text
+
+defn stdout-tty?():
+  # IPC captures child stdout, so test the parent's original descriptor.
+  result =:
+    ipc/shell: 'test -t 3 3< /proc/$PPID/fd/1'
+  result.exit ==: 0
+
+defn terminal-columns(tty):
+  columns =: ENV.COLUMNS || ''
+  if columns =~ /^[0-9]+$/:
+    then: N(columns)
+    else:
+      result =:
+        when tty:
+          ipc/shell: 'stty size < /proc/$PPID/fd/1'
+      size =: (result.exit == 0) &&
+        (result.out =~ /^\s*\d+\s+(\d+)\s*$/)
+      if size: N(size.1) 0
+
+defn get-options(args):
+  loop args args, font 'standard', words []:
+    if args.!:
+      then: :[font words]
+      else:
+        arg =: args.0
+        cond:
+          arg.in?(['-h' '--help']):
+            say: |
+              Usage: yamlet [-f FONT] [TEXT ...]
+
+                Reads /usr/share/figlet/FONT.tlf or a font file path.
+                Reads stdin without TEXT; centers to the terminal width.
+                COLUMNS overrides the detected width when exported.
+                Pads rows equally; uses bold bright yellow on terminals.
+
+            exit: 0
+          arg.in?(['-f' '--font']):
+            when args.# < 2:
+              die: 'yamlet: -f requires a font name or path'
+            recur: args.drop(2), args.1, words
+          arg == '--': :[font words.concat(args:rest)]
+          arg.starts?('-'):
+            die: "yamlet: unknown option $arg"
+          else:
+            recur: args:rest, font, words.conj(arg)
+
+defn load-font(name):
+  path =:
+    if name =~ /\//:
+      name
+      "/usr/share/figlet/$name$(name.ends?('.tlf').if('' '.tlf'))"
+  source =:
+    try:
+      lines: read(path)
+      catch Exception error:
+        die: "yamlet: cannot read font $path"
+  header =: source.0:words
+  when header.0 !~ /^[ft]lf2a.$/:
+    die: "yamlet: invalid FIGlet font $path"
+  hardblank =: subs(header.0 5)
+  height =: N(header.1)
+  old-layout =: N(header.4)
+  layout =:
+    if header.# > 7:
+      then: N(header.7)
+      else:
+        cond:
+          old-layout < 0: 0
+          old-layout == 0: 64
+          else: old-layout + 128
+  codes =: (32 .. 126).concat([196 214 220 228 246 252 223])
+  loop lines source.drop(N(header.5).++), codes codes, glyphs {}:
+    if lines.!:
+      then::
+        height:: height
+        hardblank:: hardblank
+        layout:: layout
+        glyphs:: glyphs
+      else:
+        tagged =: codes.!
+        code =: tagged.if(lines.0:words.0:N codes.0)
+        body =: tagged.if(lines:rest lines)
+        rows =: body.take(height).map(strip-endmark):V
+        when rows.# != height:
+          die: "yamlet: incomplete glyph in $path"
+        recur:
+          body.drop(height)
+          codes:rest
+          glyphs.put(code rows)
+
+defn strip-endmark(row):
+  marker =: row:last:S
+  loop row row:
+    if row.ends?(marker):
+      recur: subs(row 0 row.#.--)
+      else: row
+
+defn render(text font):
+  blank =: font.height.repeat(''):V
+  rows =:
+    reduce _ blank text:
+      fn(rows char):
+        code =: int(char)
+        glyph =: font.glyphs.$code
+        if glyph:
+          append-glyph(rows glyph font)
+          rows
+  leading =: min(rows.map(\((_ =~ /^[ ]*/).#))*)
+  mapv _ rows:
+    fn(row):
+      row: .subs(leading).replace(font.hardblank ' ')
+
+defn append-glyph(rows glyph font):
+  if rows.0.!:
+    glyph
+    combine(rows glyph font)
+
+defn combine(rows glyph font):
+  overlap =:
+    if bit-and(font.layout 192).!:
+      then: 0
+      else:
+        amounts =:
+          map _ rows glyph:
+            fn(left right):
+              a =: left.replace(/[ ]+$/ '')
+              b =: right.replace(/^[ ]+/ '')
+              space =: (left.# - a.#) + (right.# - b.#)
+              collision =: a.? && b.? &&
+                smush(a:last:S b:first:S font).?
+              space +: collision.if(1 0)
+        min: glyph.0.# amounts*
+  mapv _ rows glyph:
+    fn(left right):
+      start =: left.# - overlap
+      middle =:
+        map _ left.drop(start) right.take(overlap):
+          fn(a b): smush(a:S b:S font)
+      subs(left 0 start) +: middle:join + subs(right overlap)
+
+defn smush(left right font):
+  layout =: font.layout
+  hardblank =: font.hardblank
+  enabled =: \(bit-and(layout _).?)
+  groups =:: ['|', /\, '[]', '{}', '()', '<>']
+  a =: groups.keep-indexed(\(when(_2.has?(left) _1)) _):first
+  b =: groups.keep-indexed(\(when(_2.has?(right) _1)) _):first
+  pair =: left + right
+  cond:
+    left == ' ': right
+    right == ' ': left
+    enabled(128).!: nil
+    (left == hardblank) || (right == hardblank):
+      when enabled(32) && (left == right): left
+    bit-and(layout 63).!: right
+    enabled(1) && (left == right): left
+    enabled(2) && (left == '_') && (b != nil): right
+    enabled(2) && (right == '_') && (a != nil): left
+    enabled(4) && (a != nil) && (b != nil) && (a != b):
+      (a > b).if(left right)
+    enabled(8) && pair.in?(['[]' '][' '{}' '}{' '()' ')(']): '|'
+    enabled(16) && (pair == '/\'): '|'
+    enabled(16) && (pair == '\/'): 'Y'
+    enabled(16) && (pair == '><'): 'X'
