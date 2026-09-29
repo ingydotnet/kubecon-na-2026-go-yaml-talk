@@ -1,0 +1,254 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use FindBin;
+use lib "$FindBin::RealBin/../repos/vroom-pm/lib";
+use Vroom;
+use Cwd qw(getcwd);
+use File::Basename qw(dirname basename);
+use File::Copy qw(copy);
+use File::Find qw(find);
+use File::Path qw(make_path remove_tree);
+use File::Temp qw(tempdir);
+use Getopt::Long qw(GetOptions);
+use JSON::PP qw(decode_json encode_json);
+use Time::HiRes qw(time);
+
+my $SPAN_RE = qr/
+    ``[^\r\n]*?`` | \^\^[^\r\n]*?\^\^ | %%[^\r\n]*?%% | ~~[^\r\n]*?~~ |
+    `[^`\r\n]*` | \^[^^\r\n]*\^ | \#[^\#\r\n]*\# | %[^%\r\n]*% | @[^@\r\n]*@ |
+    \*[^*\s\r\n](?:[^*\r\n]*[^*\s\r\n])?\*
+/x;
+
+sub span_width {
+    return $_[0] =~ /\A(?:``|\^\^|%%|~~)/ ? 2 : 1;
+}
+
+sub span_body {
+    my ($span) = @_;
+    my $width = span_width($span);
+    return length($span) > 2 * $width
+        ? substr($span, $width, -$width) : $span;
+}
+
+sub ansi_span {
+    my ($span) = @_;
+    my $width = span_width($span);
+    return $span if length($span) <= 2 * $width;
+    return "\e[9m" . span_body($span) . "\e[29m"
+        if substr($span, 0, 2) eq '~~';
+    return "\e[1m" . span_body($span) . "\e[22m"
+        if substr($span, 0, 1) eq '*';
+    my %colors = ('`' => 153, '^' => 121, '#' => 250, '%' => 216, '@' => 229);
+    my $color = $colors{substr($span, 0, 1)};
+    my $weight = $width == 2 ? 1 : 22;
+    return "\e[$weight;38;5;${color}m" . span_body($span) . "\e[0m";
+}
+
+sub bullet_items {
+    my ($lines) = @_;
+    my (@items, @parents);
+    for my $row (0 .. $#$lines) {
+        my $plain = $lines->[$row];
+        $plain =~ s/($SPAN_RE)/span_body($1)/eg;
+        next unless $plain =~ /\S/;
+        my ($padding) = $plain =~ /^([ \t]*)/;
+        my $indent = length $padding;
+        pop @parents while @parents && $parents[-1][0] >= $indent;
+        if ($plain =~ /^[ \t]*\*\s+/) {
+            push @parents, [$indent, scalar @items];
+            push @items, [$row];
+        }
+        elsif (@parents) {
+            push @{$items[$parents[-1][1]]}, $row;
+        }
+    }
+    return \@items;
+}
+
+sub styled_line {
+    my ($line, $color, $last, $bold) = @_;
+    my ($padding, $text, $ending) = $line =~ /\A([ \t]*)(.*?)(\r?\n)?\z/;
+    my $weight = $bold ? 1 : 22;
+    my $style = $last ? "$weight;4;38;5;$color" : "$weight;38;5;$color";
+    my $base = "\e[${style}m";
+    $text =~ s/\e\[22m/\e[1m/g if $bold;
+    $text =~ s/\e\[(1|22);38;5;(\d+)m/\e[$1;4;38;5;${2}m/g if $last;
+    $text =~ s/\e\[0m/\e[0m$base/g;
+    return $padding . $base . $text . "\e[0m" . ($ending // '');
+}
+
+sub centered {
+    my ($width, $text, $color) = @_;
+    return '' unless length $text;
+    my $plain = $text;
+    $plain =~ s/($SPAN_RE)/span_body($1)/eg;
+    my $style = defined $color ? "\e[22;38;5;${color}m" : '';
+    return ' ' x (($width - length($plain)) / 2) . $style . $text;
+}
+
+{
+    package TalkVroom;
+    our @ISA = ('Vroom');
+
+    sub extract_notes {
+        my $self = shift;
+        # Protect paired percent spans from Vroom's leading-% title marker.
+        $_[0] =~ s/^(?=%[^%\r\n]*%)/\x00/gm;
+        my @notes = $self->SUPER::extract_notes(@_);
+        for ($_[0], @notes) {
+            s/^\x00(?=%)//gm;
+        }
+        return @notes;
+    }
+
+    sub applyOptions {
+        my ($self, $slide, $flags) = @_;
+        my $formatted = $self->SUPER::applyOptions($slide, $flags);
+        return $formatted unless $formatted;
+        push @{$self->{talk_replace}}, $flags->{replace} // 0;
+        my $width = $self->config->{width};
+        # Measure visible text rather than span delimiters when centering.
+        if ($flags->{center} // $self->config->{center}) {
+            $formatted =~ s/^(\+?) *(.*?) *$/
+                $1 . main::centered($width, $2)/gem;
+        }
+        # Strip and center headings here, before Vroom's heading formatter.
+        $formatted =~ s/^(\+?) *== +(.*?) *$/
+            $1 . main::centered($width, $2, 225)/gem;
+        return $formatted;
+    }
+}
+
+my $run;
+GetOptions('run' => \$run) && !@ARGV
+    or die "Usage: $0 [--run]\n";
+
+my $root = getcwd();
+my $cache = "$root/.cache/vroom-watch";
+make_path($cache);
+my $stage = tempdir('build-XXXXXX', DIR => $cache, CLEANUP => 1);
+
+# Resolve includes before changing to the isolated output directory.
+my $vroom = Vroom->new;
+bless $vroom, 'TalkVroom';
+$vroom->getInput;
+chdir $stage or die "Can't enter $stage: $!\n";
+$vroom->buildSlides;
+$vroom->writeVimrc;
+$vroom->writeScriptRunner;
+$vroom->writeHelp;
+chdir $root or die "Can't enter $root: $!\n";
+
+my (@files, @directories);
+find({
+    no_chdir => 1,
+    wanted => sub {
+        return if $_ eq $stage;
+        my $relative = substr($_, length($stage) + 1);
+        push @files, $relative if -f $_;
+        push @directories, $relative if -d $_;
+    },
+}, $stage);
+@files = sort @files;
+my @slides = grep { /^\d+[a-z]*(?:\.[\w-]+)*$/ } @files;
+die "No slides generated\n" unless @slides;
+
+my %groups;
+for my $slide (@slides) {
+    my ($number) = $slide =~ /^(\d+)/;
+    push @{$groups{$number}}, $slide;
+}
+my (@previous_lines, @active);
+my $previous_number = '';
+
+# Add inline styles and the active bullet cue after Vroom expands reveals.
+for my $slide (@slides) {
+    open my $input, '<', "$stage/$slide" or die "Can't read $slide: $!\n";
+    my @lines = <$input>;
+    close $input or die "Can't close $slide: $!\n";
+    my @plain_lines = @lines;
+    pop @plain_lines while @plain_lines && $plain_lines[-1] =~ /^\s*$/;
+    my ($number) = $slide =~ /^(\d+)/;
+    if ($number ne $previous_number) {
+        @previous_lines = @active = ();
+    }
+    my $items = bullet_items(\@plain_lines);
+    my $multipart = @{$groups{$number}} > 1;
+    my %last;
+    if ($multipart) {
+        my $prefix = 0;
+        $prefix++ while $prefix < @previous_lines && $prefix < @plain_lines
+            && $previous_lines[$prefix] eq $plain_lines[$prefix];
+        my $append = !$vroom->{talk_replace}[$number - 1]
+            && $number eq $previous_number && $prefix == @previous_lines;
+        my $start = $append ? $prefix : 0;
+        my @fresh = grep { grep { $_ >= $start } @$_ } @$items;
+        @active = map { @$_ } @fresh if @fresh;
+        @active = () unless @fresh || $append;
+        %last = map { $_ => 1 } @{$items->[-1]}
+            if @$items && $slide eq $groups{$number}[-1];
+    }
+    my %current = map { $_ => 1 } @active;
+    for my $row (0 .. $#lines) {
+        my $heading = $lines[$row] =~ s/^([ \t]*)\e\[22;38;5;225m/$1/;
+        $lines[$row] =~ s/($SPAN_RE)/ansi_span($1)/eg;
+        if ($heading) {
+            $lines[$row] = styled_line($lines[$row], 225, 0);
+        }
+        elsif ($multipart && $current{$row}) {
+            $lines[$row] = styled_line($lines[$row], 231, $last{$row}, 1);
+        }
+    }
+    @previous_lines = @plain_lines;
+    $previous_number = $number;
+    open my $output, '>', "$stage/$slide" or die "Can't write $slide: $!\n";
+    print {$output} @lines or die "Can't write $slide: $!\n";
+    close $output or die "Can't close $slide: $!\n";
+}
+
+my $manifest = "$cache/manifest.json";
+my @previous;
+if (-f $manifest) {
+    open my $fh, '<', $manifest or die "Can't read $manifest: $!\n";
+    local $/;
+    @previous = @{decode_json(<$fh>)->{files}};
+    close $fh or die "Can't close $manifest: $!\n";
+}
+else {
+    @previous = map { basename($_) }
+        grep { -f $_ && basename($_) =~ /^\d+[a-z]*(?:\.[\w-]+)*$/ }
+        glob("$root/0*");
+}
+
+make_path(map { "$root/$_" } @directories) if @directories;
+for my $file (@files) {
+    my $destination = "$root/$file";
+    make_path(dirname($destination));
+    my $temporary = "$destination.watch-$$";
+    copy("$stage/$file", $temporary)
+        or die "Can't stage $file: $!\n";
+    rename $temporary, $destination
+        or die "Can't replace $file: $!\n";
+}
+my %present = map { $_ => 1 } @files;
+for my $file (@previous) {
+    next if $present{$file};
+    unlink "$root/$file" or die "Can't remove $file: $!\n"
+        if -f "$root/$file";
+}
+
+# Publishing the manifest last tells Vim the complete deck is available.
+open my $fh, '>', "$manifest.tmp" or die "Can't write $manifest: $!\n";
+print {$fh} encode_json({
+    generation => time . "-$$",
+    files => \@files,
+    slides => \@slides,
+}) or die "Can't write $manifest: $!\n";
+close $fh or die "Can't close $manifest: $!\n";
+rename "$manifest.tmp", $manifest or die "Can't replace $manifest: $!\n";
+
+if ($run) {
+    remove_tree($stage);
+    $vroom->startUp;
+}

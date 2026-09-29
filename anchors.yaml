@@ -1,0 +1,12 @@
+vars: &vars
+  app: &app nginx
+  defaults: &defaults
+    replicas: &replicas 3
+    namespace: dev
+
+all: *vars
+app: *app
+replicas: *replicas
+deployment:
+  <<: *defaults
+  namespace: prod

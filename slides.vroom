@@ -1,0 +1,688 @@
+---- config
+title: Introducing go-yaml's New Plugin System
+indent: 5
+
+height: 26
+width: 82
+
+# height: 29
+# width: 111
+
+vim_opts: '-u NONE'
+skip: 0
+top: 2
+before: 1
+
+vimrc: |
+  source ./vimrc
+
+---- center
+
+^Introducing go-yaml's New Plugin System^
+
+Ingy döt Net
+
+%KubeCon + CloudNativeCon North America%
+
+Salt Lake City
+
+November 11, 2026
+
+----
+== Pop Quiz
+
+* Who has used YAML before?
+
++* Who uses it regularly for configuration?
+
++* Who has written software that uses a YAML library?
+
++* Who has written YAML libraries or tools?
+
++* Who works for a company or on a project
+  that has modified or extended YAML behavior?
+
++* Who knows that JSON is a proper subset of YAML?
++  * Who believes that is actually true?
++    * Ingy and Wikipedia do!
+
+----
+== Yes, this is Vim!
+
+* These slides are written in ^Vroom^
+  * Written in a single Markdown-ish file
+
+* Vroom runs live demo commands:
+  $ figlet --font=standard -w 90 'go-yaml Plugins!'
+
+* Launches web pages:
+  * https://ingy.net
+
+----
+== Let's Begin at the End!
+
+* There's @SOOOO MUCH COOL STUFF@ to show you!
+
++* We will run out of time!
+
++* Let's #save#Show the Best #for#Stuff #Last#%First%!
+
++* ^Buckle Up!^
+
+----
+== YAML has an Anchor/Alias problem
+
+  vars: &vars
+    app: &app nginx
+    defaults: &defaults
+      replicas: &replicas 3
+      namespace: dev
+
+  all: *vars
+  app: *app
+  replicas: *replicas
+  deployment:
+    <<: *defaults
+    namespace: prod
+
+* We don't want `vars` in the final result
+
+$ yaml -J anchors.yaml
+
+----
+== Using Multiple YAML Documents Doesn't Help
+
+  ---
+  vars: &vars
+    app: &app nginx
+    defaults: &defaults
+      replicas: &replicas 3
+      namespace: dev
+  ---
+  all: *vars
+  app: *app
+  replicas: *replicas
+  deployment:
+    <<: *defaults
+    namespace: prod
+
+* %The YAML Spec forbids cross document aliases (references)%
+
++* That's Dumb! Let's break the rules!
+
+* The new go-yaml v4 AliasData plugin lets us do this and more!
+
+----
+== What if YAML could import more YAML?
+
+* Put our variable data in a separate `vars.yaml` file:
+
+    app: nginx
+    defaults:
+      replicas: 3
+      namespace: dev
+
+* Now let's import it into our main YAML file
+
+----
+== Function Calls using YAML Tags
+
+* Our main YAML file is `input.yaml`:
+
+    %!import% `vars`: vars.yaml  # Create `vars` "anchor"
+    all: `*vars`      # Alias to `vars` anchor
+    app: `*vars.app`  # .path selection works!
+    replicas: `*vars.defaults.replicas`
+    deployment:
+      <<: `*vars.defaults`  # Merge defaults
+      namespace: @prod@
+
+* We can make this YAML work with 2 new ^go-yaml plugins^:
+  * go.yaml.in/yaml/v4/plugin/@aliasdata@
+  * go.yaml.in/yaml/v4/plugin/@functiontag@
+
+> vim input.yaml vars.yaml -O
+> go run main.go
+> vim main.go
+
+----
+== Make ^Custom YAML DSLs^ with @Implicit Tagging@
+
+* You can set up any tag for any function…
+* You can do this without using tags at all!
+
+  You could change:
+    %!import% `vars`: vars.yaml
+  To something like this:
+    %import% `vars`: vars.yaml
+  Or maybe:
+    ^<<&vars^: vars.yaml
+
+* Craft your own custom YAML DSLs!
+
+* The ^YAML-Rules^ plugin lets you determine @Tag Resolution@
+
++* I think I need to show you how YAML really works!
+
+----
+== The YAML %Dump%/%Load% Stack (How a YAML really works)
+== https://yaml.org/spec/1.2.2/#31-processes
+
+              %Loader%             Data State              %Dumper%
+         ===========================================================
+                                (YAML Input)
+              Reader                                     Writer
+                           (YAML Character Stream)
+             Scanner
+                             (YAML Token Stream)
+              `Parser`                                     Emitter
+                             ^(YAML Event Stream)^
+            `Composer`                                     Serializer
+                               (YAML Node Tree)
+            `Resolver`                                     Desolver
+                        ^(Tagged Representation Graph)^
+         `Constructor`                                     Representer
+                            (Native Data Objects)
+
+----
+== Tag Resolution
+
+$ yaml --debug <<<'a: [b, 3, true]'
+
+* YAML adds a tag to every untagged node
+* This is called Tag Resolution
+* The Constructor phase uses the tag to look up a function (always)
+
++* ^The internal state after tag resolution:^
+
+    `!!map`
+    `!!str` "a": `!!seq` [`!!str` "b", `!!int` "3", `!!bool` "true"]
+
+* Implicitly Tagged YAML:
+$ yaml -J <<<'a: [b, 3, true]'
+* Explicitly Tagged:
+$ yaml -J <<<'!!map {!!str "a": !!seq [!!str "b", !!int "3", !!bool "true"]}'
+
+* We just configured our own Tag and Constructor function to make a DSL!
+
+----
+== go-yaml v4 comes with a ^New CLI^ called '`go-yaml`'
+
+$ cat vars.yaml
+
+* Convert YAML
+$ go-yaml -J vars.yaml
+
+* Inspect internal Loader states:
+$ go-yaml -t vars.yaml
+$ go-yaml -e vars.yaml
+$ go-yaml -N vars.yaml
+* Great for debugging YAML issues
+  * Please, ^Use the CLI to report bugs^
+
+* Use plugins. Configure go-yaml with more YAML!
+$ vim options.yaml
+$ go-yaml -y --config=options.yaml input.yaml
+
+----
+== What you just saw…
+
+* ^YAML's existing syntax doing new things^
+  * Using optional plugins with go-yaml v4
+
++* %Function-Tag plugin% connects tags to Go functions
+  * We chose `!import` and the function it calls
+
+* %Alias-Data plugin% makes imported values available through aliases
+  * Dotted paths select values; merges combine defaults and overrides
+
+* %YAML-Rules plugin% can assign tags implicitly
+  * Turn ordinary YAML into your own DSL
+
++* The same plugins work through Go and %new go-yaml CLI%
+  * Configure them in Go code or in YAML
+
+* @Your application decides what YAML means@
+
++* Now let's back up and see how we got here!
+
+----
+== YAML Turned 25 This Year!
+
+* YAML implementations in over %50 languages%
+  * Ada, C, C++, C#, CFML, Clojure, Common Lisp, Crystal, D, Dart, Delphi,
+    Dyalog APL, Elixir, Erlang, F#, Fortran, ^Go^, Groovy, Haskell, Haxe, Java,
+    JavaScript, Julia, Kotlin, Lua, ML, MoonBit, Nim, Objective-C, OCaml, Octave,
+    Perl, PHP, PowerShell, PureScript, Python, R, Racket, Raku, Ruby, Rust,
+    Scala, Scheme, Shell, Swift, Tcl, TypeScript, Typst, V, Vala, Vim, Zig
+  * https://yaml.org/libraries/
+
+* Multiple implementations in most languages
+  * 5 implementations in ^Go^ :-)
+
+* YAML is used almost everywhere you look
+  * Kubernetes, Docker, Ansible, CI
+  * General configuration
+  * Nearly ^80% of active GitHub repos^ have a YAML file
+
+----
+== YAML has some Problems
+
+* The YAML spec is huge
+  * But is it `impossible to change`?
+  * Would need to be implemented in every language :\
+
+* Many implementations are still YAML 1.1 (@2005@)
+  * YAML 1.2 dates to @2009@ (updated in @2021@)
+
+* No two YAML implementations are fully compatible :-(
+
+----
+== The YAML Family Tree
+
+* Most top %YAMLs are descended from PyYAML% (2005)
+  * %NOT% from the spec :\
+
+* I call these ^The YAML Family^
+
+* %PyYAML%     - 2005 - Kirill Simonov   - The OG YAML
+* `libyaml`    - 2006 - Kirill Simonov   - Port of PyYAML
+  * YAML shared library for many languages:
+      Ruby, Python, Perl, PHP, Lua, R
+* `snakeyaml`  - 2009 - Andrey Somov     - Port of PyYAML
+* ^go-yaml    - 2014 - Gustavo Niemeyer - Port of libyaml^
+* `serde-yaml` - 2016 - David Tolnay     - Port of libyaml (Rust)
+
+* Many ported bugs:
+  * https://play.yaml.com/?show=gdhflLnJPpxHUrsS#Zm9vOiB7OiBiYXJ9
+
+----
+== Ingy döt Net
+
+* ^I Invented YAML^
+  * w/ Clark Evans and Oren Ben-Kiki (2001-2009).
+
++* ^I lead maintenance^ for:
+  * %The YAML Specification%
+  * (Inherited) %YAML Family% core projects
+    * ^go-yaml^, `PyYAML`, `libyaml`, `serde-yaml`
+  * New YAML Projects
+    * `YAMLScript`  https://yamlscript.org
+    * `YAMLStar`    https://yamlstar.org
+    * `YAMLSchema`  https://yamlschema.org
+
+
+----
+== YAML is my Passion!
+
+* I am *Making* new YAML frameworks and tools
+
+* I'm *Working* with the authors of YAML frameworks and tools
+
+* I'm *Moving* the Family forward together
+  * ^go-yaml^ and ^YAMLStar^ lead the way
+  * PyYAML and Family relatives to follow
+
+* *Finishing* what we started in 2001
+  * A full %YAML Platform% like the %XML Platform%
+  * Schema:    DTD,XSD           -> @YAMLSchema@ (YSD)
+  * Transform: XSLT,XPath,XQuery -> @YAMLScript@
+
+----
+== The go-yaml/yaml Project
+
+* %go-yaml/yaml% is YAML's ^most popular^ implementation
+  * ~^80K Go projects^ on GitHub use go-yaml directly
+  * Very heavily used in the ^Kubernetes^ ecosystem
+  * Created by ^Gustavo Niemeyer^ in 2014
+  * Officially %archived April 2025%
+
+* Two main versions: ^v2^ and ^v3^
+  * v3 added ^comment support^
+
+* ^kubernetes-sigs/yaml forked^
+  * Full copies of the v2 and v3 branches' code
+  * A few important patches
+
+
+----
+== The yaml/go-yaml Project
+
+* ^yaml/go-yaml^ project started mid-April 2025
+  * Blessed fork of %go-yaml/yaml%
+  * Formed a solid group of maintainers
+  * Davanum Srinivas - ^@dims++^
+    * dims ^UNFORKED^ the kubernetes-sigs/yaml fork on Day 1!!
+
+* ^4500 projects have switched^ to yaml/go-yaml
+  * Used %in Kubernetes% proper
+
+* ^Painless transition^ from v2 and v3
+  * No new features, only security patches
+
++* New go-yaml `v4` leads the ^Future of YAML^!
+
+----
+== go-yaml v4.0.0 Released
+
+* ^go-yaml v4.0.0 was Released last week!^
+* Painless migration from v2 or v3 for most users
+* Already used by over 100 repos!
+
+* New "With"-style options system
+  * WithV2Defaults() and WithV3Defaults() option groups
+
+* Shout out to the ^go-yaml dev team^!
+  * Especially Christophe Colombier ^@ccoVeille^!!
+  * Also %Colin Lacy% and %dims%
+
+* ^v4 Plugin system can take YAML to new places^
+
+----
+== The go-yaml v4 Plugin System
+
+* Plugin APIs reach deep into go-yaml code
+
+* Original code becomes the default plugin for an API
+
+* Each plugin has its own configuration settings
+
+* You can implement your own plugin module for any API
+
++* This talk is about the New go-yaml Plugin System
+
+  * But first...
+
+----
+== Let's imagine the future of YAML!
+
+     __        ___           _     _  __  __   __ _    __  __ _               ___
+     \ \      / / |__   __ _| |_  (_)/ _| \ \ / // \  |  \/  | |             |__ \
+      \ \ /\ / /| '_ \ / _` | __| | | |_   \ V // _ \ | |\/| | |               / /
+       \ V  V / | | | | (_| | |_  | |  _|   | |/ ___ \| |  | | |___           |_|
+        \_/\_/  |_| |_|\__,_|\__| |_|_|     |_/_/   \_\_|  |_|_____|  _____   (_)
+                                                                     |_____|
+
+----
+== What if YAML were Fully Programmable?
+
+* Introducing YAMLScript (YS)
+
+* Lets any YAML data be code
+
+* https://yamlscript.org
+
+----
+== Python Data as Config
+
+* %You _could_ use Python code as a config language…%
+
+# A Python config program, using only data syntax:
+
+{
+    "service": "yaml-api",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "debug": False,
+    "workers": 4,
+    "allowed_origins": ["https://example.com"],
+}
+
+* Show as JSON
+$ python -c 'import json;print(json.dumps(eval(open("config-1.py").read())))' | jq .
+
+----
+== YAMLScript == Dynamic Python as Config
+
+# Same thing using code to calculate some data values:
+
+{
+    "service": "yaml-api",
+    "host": ".".join(["127", "0", "0", "1"]),
+    "port": 8000 + 80,
+    "debug": 1 > 2,
+    "workers": 2 * 2,
+    "allowed_origins": ["https://example.com"],
+}
+
+$ python -c 'import json;print(json.dumps(eval(open("config-1.py").read())))' | jq .
+
+----
+== Dynamic YAML as Config
+
+# Same thing as Python, but the code is YAML:
+
+    !ys-0:
+    service: yaml-api
+    host:: +[127 0 0 1].join('.')
+    port:: 8000 + 80
+    debug:: 1 > 2
+    workers:: 2 * 2
+    allowed_origins: [https://example.com]
+
+$ ys -J sample.yaml
+
+* `::` means value is a code expression
+
+----
+== What if YAML were a @Complete Programming Language@ like Python?!
+
+* YS can make YAML dynamic
+* It's also a complete language like Python
+
+* ^I wrote a "figlet" in YS called `yamlet.ys` (under 200 lines^)
+  * It reads FIGlet font files
+  * It centers the output and prints in bright yellow
+
+> ys yamlet.ys -f standard 'What if YAML _ ?'
+> vim yamlet.ys
+
++* All YAMLScript is 100% valid YAML!
+
+* ^My^ @Codex AI Agent@ ^actually wrote yamlet.ys^
+  * yamlscript.org has a %Great YAMLScript Skill% for agents
+  * It works every time
+  * Writes YS code almost a good as Ingy! :-)
+
+* ^I write all my automation scripts in YS now^
+
+----
+== This talk's online slideshow is written in YS
+
+* https://ingydotnet.github.io/kubecon-na-2026-go-yaml-talk/
+
+* A YS program called `vroom-to-html.ys` creates the web app!
+* https://raw.githubusercontent.com/ingydotnet/kubecon-na-2026-go-yaml-talk/refs/heads/main/util/vroom-to-html.ys
+
+* YAMLSchema is a new Schema language for YAML
+  * https://yamlschema.org
+  * Roundtrips with JSON Schema perfectly
+  * The `ysd` CLI is written in YS
+  * ^Same YS code^ drives the Wasm website demos!
+
+----
+== What if YS compiled to native executables?
+
+> ys --to=bin yamlet.ys   # compile to yamlet
+
+> file yamlet
+
+> ./yamlet 'Try that, Python!'
+
+----
+== What if YAML/YS actually compiled to Go code?!?!
+
+* YAMLScript compiles to ^Clojure^ (a Lisp)
+* There's a new Clojure dialect for Go called ^Glojure^
+* Glojure compiles Clojure to ^Go^
+* Go (cross-)compiles to ^Everything^!
+  * WebAssembly (Browser & WASI)
+  * Native binaries
+  * Native shared libraries
+
+* Check out Gloat!
+  * ^GLO^jure ^A^utomation ^T^ool
+  * Simple compilation of YS/Clojure -> Go
+  * `ys --to=bin ...` uses it
+  * https://gloathub.org/
+
+----
+== What if ^Kubernetes^ were rewritten in YAML?!
+
+* %LOL%!!!
+
+* Technically it might be possible!
+
+* ^YAMLScript IS a new way to write Go code!^
+
+* Try it out for your Kubernetes projects :-)
+  * Let me know
+
+* YAMLScript also can be used to write Java!
+
+----
+== What if there was a @100% Compatible YAML Library@ for every language?
+
+* Full featured
+* Same in every language
+  * Same API
+  * Same features
+  * Same bugs
+  * Same fixes
+
+----
+== Introducing YAMLStar
+
+* https://yamlstar.org
+  * A YAML framework for 32 programming languages (so far!)
+
+* YAMLStar works the same in every language
+  * Same API, same features, same bugs, same fixes
+
+* YAMLStar ALSO has a ^Plugin System^!
+  * Same plugins for all languages
+  * ^Most plugins are shared with go-yaml!!^
+
+* Has a CLI called "yaml", very similar to the "go-yaml" CLI
+  $ go-yaml -J <<<'a: [ok, 1, 2.3, true, null]'
+  $ yaml    -J <<<'a: [ok, 1, 2.3, true, null]'
+
+----
+== YAMLStar -> New YAML Spec!
+
+* YAML 1.2 dates to 2009
+  * Many YAMLs are still at 1.1
+
+* YAMLStar has plugins
+  * Plugins let us try new things
+  * go-yaml has many of the same plugins!
+
+* ^Popular new ideas become part of the next spec^
+  * Implementations in every language
+  * Before the spec is published!
+  * YAMLStar and %go-yaml plugins are the key to YAML 1.3!%
+
+* YAMLStar is how we get to %YAML 1.3% (or 2.0)!
+  * Working ^implementations in every language^ *before* release!
+  * Plugins let us ^experiment with new ideas^ in YAML 1.2…
+    before deciding what goes into the next YAML spec!
+
++* %Back to go-yaml Plugins!%
+
+----
+== What if YAML supported tab indentation?
+
+$ cat tabs.yaml
+$ sed 's/\t/=>/g' tabs.yaml  # Prove really tabs!
+
+* ^Works in both YAMLStar and go-yaml!^
+$ yaml    -J --plugin=tab-indent tabs.yaml
+$ go-yaml -J --plugin=tab-indent tabs.yaml
+
+* And in Go code, of course:
+$ vim tabs.go
+$ go run tabs.go
+
+----
+== What if you could write ^go-yaml plugins in YS^?
+
+* %YS is Go%. Should be easy!
+
+* We can swap out %the entire Parser% for go-yaml
+  * With the `YAML-Parser` plugin API
+
+* ^There is already 7 current parser plugins:^
+  go-yaml       - Native Go parser (default for go-yaml & YAMLStar)
+  reference     - YAML reference grammar parser
+  snakeyaml     - Java's SnakeYAML Engine parser
+  rapidyaml     - C++ RapidYAML parser
+  json-comments - YAML parser supporting C-style comments
+  %toml          - Parse TOML to YAML events%
+  ^csv           - Parse CSV/TSV to YAML events^
+
+----
+== yamlstar-plugin-parser-csv
+
+* I wrote a ^CSV/TSV^ parser plugin for go-yaml
+  * %In YAMLScript!%
+
+* https://raw.githubusercontent.com/yamlstar/yamlstar-plugin-parser-csv/refs/heads/main/src/csv_parser/core.ys
+
+* A CSV file:
+$ cat data.csv
+
+* Need to build the go-yaml CLI with it:
+$ make -C repos/go-yaml cli PLUGIN-PACKAGE=github.com/yamlstar/yamlstar-plugin-parser-csv/goyaml@v0.1.0
+
+* Try it out:
+$ go-yaml -J --plugin=yaml-parser=csv data.csv
+
+* Parses CSV to go-yaml Event structs:
+$ go-yaml -e --plugin=yaml-parser=csv data.csv
+
+----
+== YAML Plugin APIs
+
+* ^Alias-Data^      - Powerful aliasing
+* Allowed-Bugs    - Choose which fixed bugs to retain
+* Comment-Model   - Better comment loading
+* ^Error-Format^    - Custom error formatting
+* ^Function-Tag^    - Define your own function calls: `!import vars: vars.yaml`
+* L10N-Keys       - YAML keys in French or Chinese
+* ^Loader-Limits^   - Custom resource limits
+* Merge-Key       - Custom `<<` merge key behavior
+* Multi-Tag       - Multiple tags `!!foo;bar`
+* Stream-Tag      - `!!yaml:helm.sh/v4`
+* String-Expand   - Alias/Reference/Variable/Expression Interpolation
+* ^Tab-Indent^      - Use tabs for YAML indentation
+* YAML-Format     - Completely custom YAML formatting
+* ^YAML-Parser^     - Use an alternate YAML parser
+* %YAML-Rules%      - Use `oui` and `non` for `true` and `false`
+* YAML-Schema     - Schema validation and association
+
++* That's all I have for you today…
+
+----
+== Questions?!
+
+> ./yamlet 'Questions?!'
+
+----
+== The End
+
+* https://github.com/yaml/go-yaml
+* https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk
+
+* https://ingy.net
+* https://yaml.org
+* https://yaml.blog
+* https://play.yaml.com
+* https://yamlscript.org
+* https://yamlstar.org
+* https://yamlschema.org
+* https://gloathub.org/
+
+* https://yaml.org/spec/1.2.2/#31-processes
+* https://github.com/ingydotnet/vroom
+* https://github.com/yamlstar/yamlstar-plugin-parser-csv/blob/main/src/csv_parser/core.ys
+* https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk/blob/main/util/vroom-to-html.ys

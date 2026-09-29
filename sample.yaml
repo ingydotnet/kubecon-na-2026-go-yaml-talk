@@ -1,0 +1,7 @@
+!ys-0:
+service: yaml-api
+host:: +[127 0 0 1].join('.')
+port:: 8000 + 80
+debug:: 1 > 2
+workers:: 2 * 2
+allowed_origins: [https://example.com]

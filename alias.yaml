@@ -1,0 +1,26 @@
+# Shared service defaults, retained across documents by alias-data.
+--- &service
+name: stargazer
+image: ghcr.io/example/stargazer:1.0
+replicas: 1
+resources: &resources
+  cpu: 250m
+  memory: 256Mi
+
+---
+# Staging inherits the first document and becomes another reusable anchor.
+staging: &staging
+  <<: *service
+  host: staging.example.com
+  replicas: 2
+
+---
+# Production inherits staging, then overrides selected settings.
+production:
+  <<: *staging
+  host: example.com
+  replicas: 6
+  resources:
+    <<: *resources
+    cpu: 1000m
+    memory: 1Gi
