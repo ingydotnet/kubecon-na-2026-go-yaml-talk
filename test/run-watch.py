@@ -140,10 +140,35 @@ class RunWatchTests(unittest.TestCase):
     call assert_equal('https_url', synIDattr(synID(row, column, 1), 'name'))
     next
     normal ,
+    call assert_equal('002z', expand('%:t'))
+    previous
+    call assert_equal('002b', expand('%:t'))
+    normal ,
+    call assert_equal('002z', expand('%:t'))
+    normal ,
+    call assert_equal('003', expand('%:t'))
+    normal ,
     call assert_equal('003', expand('%:t'))
     call assert_false(&l:wrap)
     call assert_equal([], timer_info())
 """, start=start)
+
+    def test_comma_jumps_to_final_reveal_with_extension(self):
+        self.source.write_text(deck().replace('----\nSecond',
+                                             '---- python\nSecond'))
+        self.compile()
+        self.vim("""
+    normal ,
+    call assert_equal('002.py', expand('%:t'))
+    normal ,
+    call assert_equal('002z.py', expand('%:t'))
+    previous
+    call assert_equal('002b.py', expand('%:t'))
+    normal ,
+    call assert_equal('002z.py', expand('%:t'))
+    normal ,
+    call assert_equal('003', expand('%:t'))
+""")
 
     def test_default_and_invalid_start(self):
         for start in ("", "0", "000"):

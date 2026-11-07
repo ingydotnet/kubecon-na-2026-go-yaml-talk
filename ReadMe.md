@@ -23,8 +23,10 @@ make run s=12
 
 This starts on slide `012`, at its first reveal.
 Omit `s`, or use `s=0`, to start at the first slide.
-Press Space or Backspace to move through reveals, or `,` to advance to the
-next numbered slide.
+Press Space or Backspace to move through reveals.
+Press `,` to jump to the final (`z`) reveal of the current multipart slide.
+On the final reveal or a single-part slide, `,` advances to the next numbered
+slide.
 
 To rebuild and refresh the Vim presentation automatically after saves:
 

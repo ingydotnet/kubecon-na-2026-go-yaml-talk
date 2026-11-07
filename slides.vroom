@@ -431,25 +431,24 @@ $ vim tabs.go
 $ go run tabs.go
 
 ----
-== How YAMLs really work: The %Dump%/%Load% Stack
-
+== The %Dump%/%Load% Stack (How a YAML really works)
 == https://yaml.org/spec/1.2.2/#31-processes
 
-      %Loader%             Data State               %Dumper%
-=============================================================
-                        (YAML Input)
-      Reader                                      Writer
-                    (YAML Character Stream)
-     Scanner
-                      (YAML Token Stream)
-      `Parser`                                      Emitter
-                      ^(YAML Event Stream)^
-    `Composer`                                      Serializer
-                       (YAML Node Graph)
-    `Resolver`                                      Desolver
-                 ^(Tagged Representation Graph)^
- `Constructor`                                      Representer
-                     (Native Data Objects)
+              %Loader%             Data State              %Dumper%
+         ===========================================================
+                                (YAML Input)
+              Reader                                     Writer
+                           (YAML Character Stream)
+             Scanner
+                             (YAML Token Stream)
+              `Parser`                                     Emitter
+                             ^(YAML Event Stream)^
+            `Composer`                                     Serializer
+                               (YAML Node Tree)
+            `Resolver`                                     Desolver
+                        ^(Tagged Representation Graph)^
+         `Constructor`                                     Representer
+                            (Native Data Objects)
 
 ----
 == The YAML Load Stack in Action

@@ -154,14 +154,19 @@ map <ENTER> :call VroomSlideRunner()<CR><CR>
 
 function! VroomNextSlide()
   let current = matchstr(expand('%:t'), '^\d\+')
-  for index in range(argidx() + 1, argc() - 1)
+  let target = argidx() + 1
+  if target >= argc()
+    return
+  endif
+  for index in range(target, argc() - 1)
     let slide = fnamemodify(argv(index), ':t')
-    if slide =~# '^\d\+' && matchstr(slide, '^\d\+') !=# current
-      execute 'argument ' . (index + 1)
-      normal! gg
-      return
+    if matchstr(slide, '^\d\+') !=# current
+      break
     endif
+    let target = index
   endfor
+  execute 'argument ' . (target + 1)
+  normal! gg
 endfunction
 
 nnoremap <silent> , :call VroomNextSlide()<CR>
