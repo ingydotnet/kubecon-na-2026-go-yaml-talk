@@ -101,61 +101,92 @@ November 9, 2026
 ----
 == What if YAML could load more YAML?
 
-* Start with a little data in `vars.yaml`:
+* Our `nginx` deployment defaults live in `vars.yaml`:
 
-    bar: 42
-    hash2:
-      inherited: true
-      key: base
+    app: nginx
+    defaults:
+      replicas: 3
+      namespace: dev
 
-* Let's use it from another YAML file!
-
-> vim demo/function-tag/vars.yaml
+* Let's deploy it to the @prod@ namespace from another YAML file!
 
 ----
-== A Function Call in a YAML Tag
+== Function Calls using YAML Tags
 
-`!load vars: vars.yaml`
+* Our main YAML file is `input.yaml`:
 
-all: *vars
-foo: *vars.bar
-inherited: *vars.hash2.inherited
-map1:
-  <<: *vars.hash2
-  key: value
+    %!load% `vars`: vars.yaml
+    all: `*vars`
+    app: `*vars.app`
+    replicas: `*vars.defaults.replicas`
+    deployment:
+      <<: `*vars.defaults`
+      namespace: prod
 
-* `!load` imports the data and defines the alias `vars`
+* %!load% imports the data and defines the alias-able `vars`
 * Aliases select the whole value, a key, or a nested key
-* `<<` merges the imported mapping; `key: value` overrides `key: base`
+* `<<` merges the defaults; `namespace: prod` overrides `dev`
 
-> vim demo/function-tag/input.yaml
+> vim input.yaml vars.yaml -O
 
 ----
-== Let's Run It With go-yaml!
+== Let's Run it with the new `go-yaml` CLI!
 
-* This is the ^unreleased Function-Tag plugin^ in go-yaml
+* This is the ^Function-Tag plugin^ in go-yaml
+  * `!load` is not special. Any `!foo` can be used
 * Working together with the ^Alias-Data plugin^
 
 $ make cli
 
-$ go-yaml -C demo/function-tag/options.yaml -y demo/function-tag/input.yaml
+$ go-yaml -C options.yaml -y input.yaml
 
 ----
 == The Directive Disappears; the Data Remains
 
 all:
-  bar: 42
-  hash2:
-    inherited: true
-    key: base
-foo: 42
-inherited: true
-map1:
-  inherited: true
-  key: value
+  app: nginx
+  defaults:
+    namespace: dev
+    replicas: 3
+app: nginx
+deployment:
+  namespace: prod
+  replicas: 3
+replicas: 3
 
 * `!load` does its work without adding an output entry
-* The imported `key: base` survives in `all`, but is overridden in `map1`
+* `all` keeps `dev`; `deployment` inherits replicas and uses `prod`
+
+----
+== The YAML %Dump%/%Load% Stack (How a YAML really works)
+== https://yaml.org/spec/1.2.2/#31-processes
+
+              %Loader%             Data State              %Dumper%
+         ===========================================================
+                                (YAML Input)
+              Reader                                     Writer
+                           (YAML Character Stream)
+             Scanner
+                             (YAML Token Stream)
+              `Parser`                                     Emitter
+                             ^(YAML Event Stream)^
+            `Composer`                                     Serializer
+                               (YAML Node Tree)
+            `Resolver`                                     Desolver
+                        ^(Tagged Representation Graph)^
+         `Constructor`                                     Representer
+                            (Native Data Objects)
+
+----
+== The YAML Load Stack in Action
+
+* The YAMLStar `yaml` CLI has a `-d` debug option
+
+$ yaml -d <<<'a: [b, 3, true]'
+
+* The go-yaml CLI also has stack inspection options
+
+* ^Understanding the Stack is the key to really understanding YAML^
 
 ----
 == Two Plugins, One Configuration
@@ -173,7 +204,7 @@ plugin:
 * `load` is a function exported by the `alias-data` library
 * The application chooses which functions YAML can call
 
-> vim demo/function-tag/options.yaml
+> vim options.yaml
 
 ----
 == The Same Plugins From Go
@@ -182,9 +213,9 @@ plugin:
 * Pass both to `yaml.Load` with `yaml.WithPlugin`
 * Load the same `input.yaml` and dump the same result
 
-> vim demo/function-tag/main.go
+> vim main.go
 
-$ cd repos/go-yaml/example/function-tag && go run .
+$ go run main.go
 
 * Now let's back up and see how we got here!
 
@@ -533,37 +564,6 @@ $ go-yaml -J --plugin=tab-indent tabs.yaml
 
 $ vim tabs.go
 $ go run tabs.go
-
-----
-== The %Dump%/%Load% Stack (How a YAML really works)
-== https://yaml.org/spec/1.2.2/#31-processes
-
-              %Loader%             Data State              %Dumper%
-         ===========================================================
-                                (YAML Input)
-              Reader                                     Writer
-                           (YAML Character Stream)
-             Scanner
-                             (YAML Token Stream)
-              `Parser`                                     Emitter
-                             ^(YAML Event Stream)^
-            `Composer`                                     Serializer
-                               (YAML Node Tree)
-            `Resolver`                                     Desolver
-                        ^(Tagged Representation Graph)^
-         `Constructor`                                     Representer
-                            (Native Data Objects)
-
-----
-== The YAML Load Stack in Action
-
-* The YAMLStar `yaml` CLI has a `-d` debug option
-
-$ yaml -d <<<'a: [b, 3, true]'
-
-* The go-yaml CLI also has stack inspection options
-
-* ^Understanding the Stack is the key to really understanding YAML^
 
 ----
 == What if you could write plugins in YAML?

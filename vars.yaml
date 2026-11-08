@@ -1,0 +1,4 @@
+app: nginx
+defaults:
+  replicas: 3
+  namespace: dev

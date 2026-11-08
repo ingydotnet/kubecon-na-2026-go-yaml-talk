@@ -1,0 +1,8 @@
+!load vars: vars.yaml
+
+all: *vars
+app: *vars.app
+replicas: *vars.defaults.replicas
+deployment:
+  <<: *vars.defaults
+  namespace: prod

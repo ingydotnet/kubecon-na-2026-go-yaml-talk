@@ -34,6 +34,7 @@ VROOM-YS-SOURCES := $(wildcard $(VROOM-YS-DIR)/*.ys \
 YS-LINT := /home/ingy/.codex/skills/yamlscript/ys-lint.ys
 GO-YAML-DEMO-DIR := $(ROOT)/repos/go-yaml
 GO-YAML-DEMO-GIT := $(GO-YAML-DEMO-DIR)/.git
+GO-DEMO-MOD := $(ROOT)/go.mod
 PYTHON-REQUIREMENTS := requirements-python.txt
 PYTHON-PIP-WRAPPER := $(PYTHON-VENV)/.pip-wrapper
 PYTHON-YAMLSTAR := $(PYTHON-VENV)/.yamlstar-$(YAMLSTAR-VERSION)
@@ -54,6 +55,7 @@ override export PATH := $(GO-YAML-DEMO-DIR):$(PATH)
 
 SHELL-DEPS += $(VROOM-DEPS)
 SHELL-DEPS += $(GO-YAML-DEMO-GIT)
+SHELL-DEPS += $(GO-DEMO-MOD)
 SHELL-DEPS += $(PYTHON-YAMLSTAR)
 SHELL-DEPS += $(YAMLSTAR-PLUGIN-INSTALLER)
 SHELL-DEPS += $(GO-YAML-PLUGINS)
@@ -184,6 +186,13 @@ $(YAMLSTAR-PLUGIN-INSTALLER): $(YAMLSTAR) \
 $(GO-YAML-DEMO-GIT):
 	@echo 'Missing required checkout: repos/go-yaml' >&2
 	@exit 1
+
+$(GO-DEMO-MOD): | $(GO-YAML-DEMO-GIT)
+	printf '%s\n' \
+	  'module kubecon-go-yaml-demo' '' \
+	  'go 1.18' '' \
+	  'require go.yaml.in/yaml/v4 v4.0.0' '' \
+	  'replace go.yaml.in/yaml/v4 => ./repos/go-yaml' > $@
 
 cli: $(GO-YAML-DEMO-GIT)
 	env -u GOROOT $(MAKE) -C $(GO-YAML-DEMO-DIR) cli

@@ -145,6 +145,23 @@ make cli \
   PLUGIN-PACKAGE=github.com/yamlstar/yamlstar-plugin-parser-csv/goyaml@v0.1.0
 ```
 
+## Function-Tag demo
+
+The demo files live at the talk root: `main.go`, `input.yaml`, `vars.yaml`,
+and `options.yaml`.
+The example imports `nginx` deployment defaults from `vars.yaml`,
+then overrides the namespace from `dev` to `prod` while retaining three
+replicas.
+
+```sh
+make cli
+make shell CMD='go-yaml -C options.yaml -y input.yaml'
+make shell CMD='go run main.go'
+```
+
+Makes creates an ignored `go.mod` that uses the checkout in `repos/go-yaml`,
+including its unreleased plugins.
+
 ## Slideshow website
 
 Build and serve the browser version locally with:
