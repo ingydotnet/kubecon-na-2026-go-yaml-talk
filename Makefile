@@ -27,6 +27,10 @@ YAMLSTAR-DOWN := $(YAMLSTAR-DOWN)/v$(YAMLSTAR-VERSION)/$(YAMLSTAR-ARC)
 
 VROOM-DEPS := $(LOCAL-ROOT)/vroom-deps-0.42
 VROOM := $(PERL) util/vroom-watch-compile
+VROOM-YS-DIR := $(ROOT)/repos/vroom
+VROOM-YS := $(VROOM-YS-DIR)/bin/vroom
+VROOM-YS-SOURCES := $(wildcard $(VROOM-YS-DIR)/*.ys \
+  $(VROOM-YS-DIR)/share/*) $(VROOM-YS-DIR)/Makefile
 YS-LINT := /home/ingy/.codex/skills/yamlscript/ys-lint.ys
 GO-YAML-DEMO-DIR := $(ROOT)/repos/go-yaml
 GO-YAML-DEMO-GIT := $(GO-YAML-DEMO-DIR)/.git
@@ -65,6 +69,25 @@ run: $(VROOM-DEPS) $(SHELL-DEPS) yamlstar-json-comments-ready \
 run-watch: export VROOM_WATCH := 1
 run-watch: export VROOM_WATCH_PERL := $(PERL)
 run-watch: run
+
+vroom: export VROOM_START_SLIDE := $(s)
+vroom: $(VROOM-YS) $(filter-out $(VROOM-DEPS),$(SHELL-DEPS)) \
+  yamlstar-json-comments-ready yamlstar-toml-ready
+	clear
+	env -u GOROOT $(VROOM-YS) $(VROOM-YS-OPTIONS)
+
+vroom-watch: VROOM-YS-OPTIONS := --watch
+vroom-watch: vroom
+
+$(VROOM-YS): $(VROOM-YS-SOURCES)
+	$(MAKE) -C $(VROOM-YS-DIR) build
+
+vroom-check: $(VROOM-YS) $(VROOM-DEPS) $(PYTHON) $(YS)
+	$(MAKE) -C $(VROOM-YS-DIR) check
+	VROOM_WATCH_PERL=$(PERL) VROOM_WATCH_YS=$(YS) \
+	  $(PYTHON) test/vroom-parity.py
+	VROOM_TEST_BACKEND=ys VROOM_WATCH_PERL=$(PERL) VROOM_WATCH_YS=$(YS) \
+	  $(PYTHON) test/run-watch.py
 
 watch-check: $(VROOM-DEPS) $(PYTHON) $(YS)
 	VROOM_WATCH_PERL=$(PERL) VROOM_WATCH_YS=$(YS) \

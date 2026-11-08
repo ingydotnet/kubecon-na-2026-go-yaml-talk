@@ -35,6 +35,20 @@ make run-watch
 make run-watch s=12
 ```
 
+These targets use Perl Vroom.
+To try the native YAMLScript implementation in `repos/vroom`, use:
+
+```sh
+make vroom
+make vroom-watch s=12
+```
+
+Both implementations support the same starting-slide and navigation keys.
+`make -C repos/vroom build` builds the native `repos/vroom/bin/vroom` using
+Makes-managed YAMLScript and Gloat dependencies.
+Run `make vroom-check` to check the native CLI and the shared presentation
+tests against it.
+
 The watcher checks `slides.vroom` and its directly included files once per
 second.
 It preserves the current numbered slide and reveal position when possible,

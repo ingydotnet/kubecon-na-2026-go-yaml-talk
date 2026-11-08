@@ -16,6 +16,16 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 PERL = os.environ["VROOM_WATCH_PERL"]
 COMPILER = ROOT / "util/vroom-watch-compile"
+YS_BACKEND = os.environ.get("VROOM_TEST_BACKEND") == "ys"
+VROOM_YS = ROOT / "repos/vroom/bin/vroom"
+COMPILE = [str(VROOM_YS), "compile"] if YS_BACKEND else [PERL, str(COMPILER)]
+START = [str(VROOM_YS)] if YS_BACKEND else [PERL, str(COMPILER), "--run"]
+
+
+def line_runner(file, number):
+    if YS_BACKEND:
+        return [str(VROOM_YS), "line", file, number]
+    return ["bash", str(ROOT / "vroom-slide-runner"), file, number]
 
 
 def deck(second="Second\n+More\n+Last", third="Third"):
@@ -61,7 +71,7 @@ class RunWatchTests(unittest.TestCase):
 
     def compile(self, success=True):
         result = subprocess.run(
-            [PERL, str(COMPILER)], cwd=self.directory,
+            COMPILE, cwd=self.directory,
             capture_output=True, text=True, timeout=15,
         )
         if success:
@@ -229,7 +239,7 @@ class RunWatchTests(unittest.TestCase):
             "\x1b[22;38;5;121m$ vim\x1b[0m \x1b[22;38;5;153mdemo.py\x1b[0m\n"
         )
         result = subprocess.run(
-            ["bash", str(ROOT / "vroom-slide-runner"), "demo-slide", "1"],
+            line_runner("demo-slide", "1"),
             cwd=self.directory, env=environment,
             capture_output=True, text=True, timeout=15,
         )
@@ -1019,7 +1029,7 @@ class RunWatchTests(unittest.TestCase):
             "autocmd VimEnter * ++nested call CheckStart()\n"
         )
         result = subprocess.run(
-            [PERL, str(COMPILER), '--run'], cwd=self.directory,
+            START, cwd=self.directory,
             env=dict(os.environ, VROOM_START_SLIDE='2', VROOM_WATCH=''),
             capture_output=True, text=True, timeout=15,
         )
@@ -1042,7 +1052,7 @@ class RunWatchTests(unittest.TestCase):
             '    \x1b[22;38;5;121mhttps://example.com/path\x1b[0m\n'
         )
         result = subprocess.run(
-            ['bash', str(ROOT / 'vroom-slide-runner'), 'url-slide', '1'],
+            line_runner('url-slide', '1'),
             cwd=self.directory,
             env=dict(os.environ, TERM='xterm',
                      PATH=str(bindir) + os.pathsep + os.environ['PATH']),
@@ -1133,6 +1143,24 @@ class RunWatchTests(unittest.TestCase):
             'select undef, undef, undef, 1.3;\n'
             f'exec $^X, q{{{COMPILER}}};\n'
         )
+        if YS_BACKEND:
+            wrapper.write_text(
+                f"#!{sys.executable}\n"
+                "import os, time\n"
+                "with open('compiler.pids', 'a') as output:\n"
+                "    output.write(str(os.getpid()) + '\\n')\n"
+                "time.sleep(1.3)\n"
+                f"os.execv({str(VROOM_YS)!r}, {COMPILE!r})\n"
+            )
+            wrapper.chmod(0o755)
+            with self.source.open('a') as source:
+                source.write(
+                    "---- config\nvimrc: |\n"
+                    "  source ./vimrc\n"
+                    "  let g:vroom_compile_command = "
+                    "[getcwd() . '/util/vroom-watch-compile']\n"
+                )
+            self.compile()
         self.vim("""
     call WaitFor('filereadable("compiler.pids")')
     let original = readfile('slides.vroom')
