@@ -39,6 +39,12 @@ CASES = {
         "----\ncentered\n+another\n"
     ),
     "many-reveals": CONFIG + "----\nFirst\n" + "+Next\n" * 28,
+    "yellow-spans": (
+        CONFIG + '----\n@one@ and @two words@ with `@literal@`\n'
+        'empty @@ unmatched @\n'
+        '---- center\n@one@ and @two words@\n'
+        '----\n* Earlier\n+* Last @yellow@ tail\n'
+    ),
 }
 
 

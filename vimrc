@@ -13,6 +13,7 @@ hi https_url term=bold,italic,underline ctermfg=LightBlue
 hi vroom_emphasis term=NONE cterm=NONE ctermfg=121 gui=NONE guifg=#87ffaf
 hi vroom_code term=NONE cterm=NONE ctermfg=153 gui=NONE guifg=#afd7ff
 hi vroom_comment term=NONE cterm=NONE ctermfg=250 gui=NONE guifg=#bcbcbc
+hi vroom_yellow term=NONE cterm=NONE ctermfg=229 gui=NONE guifg=#ffffaf
 hi vroom_accent term=NONE cterm=NONE ctermfg=216 gui=NONE guifg=#ffaf87
 hi vroom_emphasis_bold term=bold cterm=bold ctermfg=121 gui=bold guifg=#87ffaf
 hi vroom_code_bold term=bold cterm=bold ctermfg=153 gui=bold guifg=#afd7ff
@@ -30,7 +31,7 @@ function! VroomHighlight()
   syn cluster vroom_spans contains=vroom_emphasis,vroom_code,vroom_comment
   syn cluster vroom_spans add=vroom_accent,vroom_emphasis_bold
   syn cluster vroom_spans add=vroom_code_bold,vroom_accent_bold
-  syn cluster vroom_spans add=vroom_bold
+  syn cluster vroom_spans add=vroom_bold,vroom_yellow
   syn match vroom_command "^\s*\%(\e\[[0-9;]*m\)*[$>].*$"
         \ contains=@vroom_spans,vroom_bold_command
   syn match https_url "\vhttps:.*"
@@ -59,6 +60,8 @@ function! VroomHighlight()
         \ start=/\e\[22;38;5;153m/ end=/\e\[0m/ oneline concealends
   syn region vroom_comment matchgroup=vroom_ansi
         \ start=/\e\[22;38;5;250m/ end=/\e\[0m/ oneline concealends
+  syn region vroom_yellow matchgroup=vroom_ansi
+        \ start=/\e\[22;38;5;229m/ end=/\e\[0m/ oneline concealends
   syn region vroom_accent matchgroup=vroom_ansi
         \ start=/\e\[22;38;5;216m/ end=/\e\[0m/ oneline concealends
   syn region vroom_emphasis_bold matchgroup=vroom_ansi
@@ -70,8 +73,9 @@ function! VroomHighlight()
   " Underlined spans retain their inline color on the final bullet.
   for [name, color, hex] in [
         \ ['emphasis', 121, '#87ffaf'], ['code', 153, '#afd7ff'],
-        \ ['comment', 250, '#bcbcbc'], ['accent', 216, '#ffaf87']]
-    for weight in (name ==# 'comment' ? [22] : [22, 1])
+        \ ['comment', 250, '#bcbcbc'], ['accent', 216, '#ffaf87'],
+        \ ['yellow', 229, '#ffffaf']]
+    for weight in (index(['comment', 'yellow'], name) >= 0 ? [22] : [22, 1])
       let group = 'vroom_' . name . (weight == 1 ? '_bold' : '') . '_underlined'
       let attributes = weight == 1 ? 'bold,underline' : 'underline'
       execute 'highlight ' . group . ' term=' . attributes

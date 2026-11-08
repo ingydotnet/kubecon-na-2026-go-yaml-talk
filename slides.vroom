@@ -51,8 +51,11 @@ Ingy döt Net
 Salt Lake City
 November 9, 2026
 
+
+
+
+^caret^ %percent% #pound# `backtick` @at-sign@ *asterisk*
 ---- skip
-^caret^ %percent% #pound# `backtick` --- @at-sign@ *asterisk*
 
 ----
 == Pop Quiz
@@ -85,6 +88,107 @@ November 9, 2026
   * https://ingy.net
 
 ----
+== Begin at the End!
+
+* There's @SOOOO MUCH COOL STUFF@ to show you!
+
++* We will run out of time!
+
++* Let's save the Best for %First%!
+
++* ^Buckle Up!^
+
+----
+== What if YAML could load more YAML?
+
+* Start with a little data in `vars.yaml`:
+
+    bar: 42
+    hash2:
+      inherited: true
+      key: base
+
+* Let's use it from another YAML file!
+
+> vim demo/function-tag/vars.yaml
+
+----
+== A Function Call in a YAML Tag
+
+`!load vars: vars.yaml`
+
+all: *vars
+foo: *vars.bar
+inherited: *vars.hash2.inherited
+map1:
+  <<: *vars.hash2
+  key: value
+
+* `!load` imports the data and defines the alias `vars`
+* Aliases select the whole value, a key, or a nested key
+* `<<` merges the imported mapping; `key: value` overrides `key: base`
+
+> vim demo/function-tag/input.yaml
+
+----
+== Let's Run It With go-yaml!
+
+* This is the ^unreleased Function-Tag plugin^ in go-yaml
+* Working together with the ^Alias-Data plugin^
+
+$ make cli
+
+$ go-yaml -C demo/function-tag/options.yaml -y demo/function-tag/input.yaml
+
+----
+== The Directive Disappears; the Data Remains
+
+all:
+  bar: 42
+  hash2:
+    inherited: true
+    key: base
+foo: 42
+inherited: true
+map1:
+  inherited: true
+  key: value
+
+* `!load` does its work without adding an output entry
+* The imported `key: base` survives in `all`, but is overridden in `map1`
+
+----
+== Two Plugins, One Configuration
+
+plugin:
+  alias-data:
+    path: true
+  function-tag:
+    libraries:
+      aliases: alias-data
+    functions:
+      load: aliases/load
+
+* `path: true` enables dotted alias lookups
+* `load` is a function exported by the `alias-data` library
+* The application chooses which functions YAML can call
+
+> vim demo/function-tag/options.yaml
+
+----
+== The Same Plugins From Go
+
+* Configure `aliasdata.New` and `functiontag.New`
+* Pass both to `yaml.Load` with `yaml.WithPlugin`
+* Load the same `input.yaml` and dump the same result
+
+> vim demo/function-tag/main.go
+
+$ cd repos/go-yaml/example/function-tag && go run .
+
+* Now let's back up and see how we got here!
+
+----
 == YAML Turned 25 This Year
 
 * YAML implementations in over %50 languages%
@@ -104,7 +208,7 @@ November 9, 2026
   * Nearly ^80% of active GitHub repos^ have a YAML file
 
 ----
-== YAML has Problems
+== YAML has some Problems
 
 * The YAML spec is huge
   * Is the spec `impossible to change`?
@@ -122,7 +226,7 @@ November 9, 2026
 
 * I call these ^The YAML Family^
 
-* `PyYAML`     - 2005 - Kirill Simonov   - The OG YAML
+* %PyYAML%     - 2005 - Kirill Simonov   - The OG YAML
 * `libyaml`    - 2006 - Kirill Simonov   - Port of PyYAML
   * YAML shared library for many languages:
       Ruby, Python, Perl, PHP, Lua, R
@@ -141,7 +245,7 @@ November 9, 2026
 
 +* ^I lead maintenance^ for:
   * %The YAML Specification%
-  * (Inherited) YAML Family core projects
+  * (Inherited) %YAML Family% core projects
     * `go-yaml`, `PyYAML`, `libyaml`, `serde-yaml`
   * New YAML Projects
     * `YAMLScript`, `YAMLStar`, `YAMLSchema`
@@ -153,12 +257,12 @@ November 9, 2026
 
 * *Moving* the Family forward together
   * ^go-yaml^ and ^YAMLStar^ lead the way
-  * PyYAML and relatives to follow
+  * PyYAML and Family relatives to follow
 
 * *Finishing* what we started in 2001
   * A full %YAML Platform% like the %XML Platform%
-  * Schema:    XSD  -> YAMLSchema (YSD)
-  * Transform: XSLT -> YAMLScript
+  * Schema:    DTD,XSD -> YAMLSchema (YSD)
+  * Transform: XSLT,XPath,XQuery -> YAMLScript
 
 ----
 == The go-yaml/yaml Project
@@ -507,6 +611,7 @@ $ go-yaml -e --plugin=yaml-parser=csv data.csv
 * Merge-Key       - Custom `<<` merge key behavior
 * Multi-Tag       - Multiple tags `!!foo;bar`
 * Stream-Tag      - `!!yaml:helm.sh/v4`
+* String-Expand   - Alias/Reference/Variable/Expression Interpolation
 * ^Tab-Indent^      - Use tabs for YAML indentation
 * YAML-Format     - Completely custom YAML formatting
 * ^YAML-Parser^     - Use an alternate YAML parser
@@ -554,6 +659,16 @@ $ go-yaml -y alias-stream.yaml
 $ go-yaml --plugin=alias-data -y alias-stream.yaml
 
 ----
+== What I hoped to show you today:
+
+* go-yaml and YAMLStar are foundational
+  * go-yaml to Go and Kubernetes
+  * YAMLStar to all languages and next YAML Spec
+* Everyone wants to change YAML
+  * YAMLScript is all changes in one
+  * go-yaml
+
+----
 == Questions?!
 
 > ./yamlet 'Questions?!'
@@ -563,6 +678,7 @@ $ go-yaml --plugin=alias-data -y alias-stream.yaml
 
 * https://ingy.net
 * https://yaml.org
+* https://yaml.blog
 * https://play.yaml.com
 * https://yamlscript.org
 * https://yamlstar.org
@@ -570,6 +686,7 @@ $ go-yaml --plugin=alias-data -y alias-stream.yaml
 * https://gloathub.org/
 
 * https://yaml.org/spec/1.2.2/#31-processes
+* https://github.com/ingydotnet/vroom
 * https://github.com/yamlstar/yamlstar-plugin-parser-csv/blob/main/src/csv_parser/core.ys
 * https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk/blob/main/util/vroom-to-html.ys
 

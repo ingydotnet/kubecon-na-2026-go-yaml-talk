@@ -11,7 +11,8 @@ URL-RE =: /https?:\/\/[^\s<]+/
 BOLD-SPANS =: /``[^\r\n]*?``|\^\^[^\r\n]*?\^\^|%%[^\r\n]*?%%/
 SINGLE-SPANS =: /`[^`\r\n]*`|\^[^^\r\n]*\^|\#[^\#\r\n]*\#|%[^%\r\n]*%/
 STAR-SPAN =: /\*[^*\s\r\n](?:[^*\r\n]*[^*\s\r\n])?\*/
-SPAN-RE =: qr("$BOLD-SPANS|$SINGLE-SPANS|$STAR-SPAN")
+YELLOW-SPAN =: /@[^@\r\n]*@/
+SPAN-RE =: qr("$BOLD-SPANS|$SINGLE-SPANS|$STAR-SPAN|$YELLOW-SPAN")
 TEXT-RE =: qr("(.*?)($SPAN-RE)|(.*)")
 CENTER-MARK =: "\uE000"
 
@@ -364,6 +365,7 @@ defn render-piece(piece):
         piece.starts?('`'): render-code(text bold)
         piece.starts?('#'): render-comment(text)
         piece.starts?('%'): render-accent(text bold)
+        piece.starts?('@'): render-yellow(text)
         else: render-emphasis(text bold)
 
 defn render-bold(text):
@@ -381,6 +383,11 @@ defn render-comment(text):
   rendered =: html-escape(text).replace(URL-RE link-url)
   =>: |-
     <span class="comment-span">$rendered</span>
+
+defn render-yellow(text):
+  rendered =: html-escape(text).replace(URL-RE link-url)
+  =>: |-
+    <span class="yellow-span">$rendered</span>
 
 defn render-accent(text bold):
   classes =: if(bold, 'accent-span bold', 'accent-span')
@@ -460,6 +467,9 @@ defn page-css(width height):
     .code-span { color: #afd7ff; font: inherit; font-weight: normal; }
     .comment-span, .comment-span a { color: #bcbcbc; font-weight: normal; }
     .accent-span, .accent-span a { color: #ffaf87; font-weight: normal; }
+    .yellow-span, .yellow-span a {
+      color: #ffffaf; font-weight: normal;
+    }
     .bold, .bold a { font-weight: bold; }
     .heading, .centered {
       padding-left: 0;

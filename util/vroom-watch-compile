@@ -16,7 +16,7 @@ use Time::HiRes qw(time);
 
 my $SPAN_RE = qr/
     ``[^\r\n]*?`` | \^\^[^\r\n]*?\^\^ | %%[^\r\n]*?%% |
-    `[^`\r\n]*` | \^[^^\r\n]*\^ | \#[^\#\r\n]*\# | %[^%\r\n]*% |
+    `[^`\r\n]*` | \^[^^\r\n]*\^ | \#[^\#\r\n]*\# | %[^%\r\n]*% | @[^@\r\n]*@ |
     \*[^*\s\r\n](?:[^*\r\n]*[^*\s\r\n])?\*
 /x;
 
@@ -37,7 +37,7 @@ sub ansi_span {
     return $span if length($span) <= 2 * $width;
     return "\e[1m" . span_body($span) . "\e[22m"
         if substr($span, 0, 1) eq '*';
-    my %colors = ('`' => 153, '^' => 121, '#' => 250, '%' => 216);
+    my %colors = ('`' => 153, '^' => 121, '#' => 250, '%' => 216, '@' => 229);
     my $color = $colors{substr($span, 0, 1)};
     my $weight = $width == 2 ? 1 : 22;
     return "\e[$weight;38;5;${color}m" . span_body($span) . "\e[0m";

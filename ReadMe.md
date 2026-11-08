@@ -94,6 +94,12 @@ Wrap text in percent signs for warm peach at regular weight:
 YAML implementations exist in over %50 languages%.
 ```
 
+Wrap text in at signs for soft yellow at regular weight:
+
+```text
+one @two three@ four five @six@ seven
+```
+
 Use double carets, backticks, or percent signs for bold versions:
 
 ```text

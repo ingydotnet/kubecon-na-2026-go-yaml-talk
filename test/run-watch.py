@@ -475,6 +475,67 @@ class RunWatchTests(unittest.TestCase):
         self.assertIn('comment # stays', html)
         self.assertIn('<a href="https://docs.example.com/#anchor"', html)
 
+    def test_yellow_spans_and_vim_colors(self):
+        self.source.write_text(
+            deck('@first@ and @second@ with `@literal@`\n'
+                 '^outer @literal@ tail^\nempty @@ unmatched @')
+            + '---- center\n@one@ and @two words@\n'
+            + '----\n* Earlier\n+* Last @yellow@ tail\n'
+        )
+        self.compile()
+        content = (self.directory / '002').read_text()
+        self.assertIn('\x1b[22;38;5;229mfirst\x1b[0m and '
+                      '\x1b[22;38;5;229msecond\x1b[0m', content)
+        self.assertIn('\x1b[22;38;5;153m@literal@\x1b[0m', content)
+        self.assertIn('outer @literal@ tail', content)
+        self.assertIn('empty @@ unmatched @', content)
+        centered = re.sub(r'\x1b\[[0-9;]*m', '',
+                          (self.directory / '004').read_text())
+        visible = 'one and two words'
+        self.assertIn(' ' * ((80 - len(visible)) // 2) + visible,
+                      centered.splitlines())
+        self.vim("""
+    let row = search('first', 'nw')
+    for word in ['first', 'second']
+      let column = match(getline(row), word) + 1
+      call assert_equal('vroom_yellow',
+            \\ synIDattr(synID(row, column, 1), 'name'))
+    endfor
+    call assert_equal('229', synIDattr(hlID('vroom_yellow'), 'fg', 'cterm'))
+    call assert_equal('', synIDattr(hlID('vroom_yellow'), 'bold', 'cterm'))
+""", start='2')
+        self.vim("""
+    normal ,
+    let row = search('yellow', 'nw')
+    let column = match(getline(row), 'yellow') + 1
+    call assert_equal('vroom_yellow_underlined',
+          \\ synIDattr(synID(row, column, 1), 'name'))
+""", start='5')
+
+    def test_yellow_spans_in_website(self):
+        self.source.write_text(deck(
+            '@first@ and @second@ with `@literal@`\n'
+            '^outer @literal@ tail^\nempty @@ unmatched @\n'
+            '@https://example.com@\n@<b>&text</b>@'
+        ))
+        result = subprocess.run(
+            [os.environ['VROOM_WATCH_YS'], str(ROOT / 'util/vroom-to-html.ys'),
+             'slides.vroom', 'site/index.html'],
+            cwd=self.directory, capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        html = (self.directory / 'site/index.html').read_text()
+        self.assertIn('<span class="yellow-span">first</span> and '
+                      '<span class="yellow-span">second</span>', html)
+        self.assertIn('<code class="code-span">@literal@</code>', html)
+        self.assertIn('outer @literal@ tail', html)
+        self.assertIn('empty @@ unmatched @', html)
+        self.assertIn('<span class="yellow-span"><a href="https://example.com"',
+                      html)
+        self.assertIn('<span class="yellow-span">&lt;b&gt;&amp;text&lt;/b&gt;</span>',
+                      html)
+        self.assertIn('color: #ffffaf; font-weight: normal;', html)
+
     def test_peach_spans_and_note_titles(self):
         self.source.write_text(
             deck('%first% and %second% with ^green^ and `100% %literal%`\n'
