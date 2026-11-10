@@ -49,13 +49,14 @@ Ingy döt Net
 %KubeCon + CloudNativeCon North America%
 
 Salt Lake City
-November 9, 2026
+
+November 11, 2026
 
 
 
 
-^caret^ %percent% #pound# `backtick` @at-sign@ *asterisk*
 ---- skip
+^caret^ %percent% #pound# `backtick` @at-sign@ *asterisk*
 
 ----
 == Pop Quiz
@@ -78,7 +79,7 @@ November 9, 2026
 ----
 == Yes, this is Vim!
 
-* Slides are written in Vroom
+* Slides are written in ^Vroom^
   * Written in a single Markdown-ish file
 
 * Runs live demo commands:
@@ -88,74 +89,103 @@ November 9, 2026
   * https://ingy.net
 
 ----
-== Begin at the End!
+== Let's Begin at the End!
 
 * There's @SOOOO MUCH COOL STUFF@ to show you!
 
 +* We will run out of time!
 
-+* Let's save the Best for %First%!
++* Let's #save#Show the Best #for#Stuff #Last#%First%!
 
 +* ^Buckle Up!^
 
 ----
-== What if YAML could load more YAML?
+== YAML has an Anchor/Alias problem
 
-* Our `nginx` deployment defaults live in `vars.yaml`:
+  vars: &vars
+    app: &app nginx
+    defaults: &defaults
+      replicas: &replicas 3
+      namespace: dev
+
+  all: *vars
+  app: *app
+  replicas: *replicas
+  deployment:
+    <<: *defaults
+    namespace: prod
+
+$ yaml -J anchors.yaml
+
+* `vars` is not data we want in the result
+
+----
+== Using Multiple YAML Documents Doesn't Help
+
+  ---
+  vars: &vars
+    app: &app nginx
+    defaults: &defaults
+      replicas: &replicas 3
+      namespace: dev
+  ---
+  all: *vars
+  app: *app
+  replicas: *replicas
+  deployment:
+    <<: *defaults
+    namespace: prod
+
+* The YAML Spec forbids cross document aliases (references)
++* That's dumb. Let's break the rules!
++* The new go-yaml v4 AliasData plugin lets us do this!
+
+----
+== What if YAML could import more YAML?
+
+* Put our variable data in a `vars.yaml` file:
 
     app: nginx
     defaults:
       replicas: 3
       namespace: dev
 
-* Let's deploy it to the @prod@ namespace from another YAML file!
+* Let's use this data in another YAML file…
 
 ----
 == Function Calls using YAML Tags
 
 * Our main YAML file is `input.yaml`:
 
-    %!load% `vars`: vars.yaml
-    all: `*vars`
-    app: `*vars.app`
+    %!import% `vars`: vars.yaml  # Create `vars` "anchor"
+    all: `*vars`      # Alias to `vars` anchor
+    app: `*vars.app`  # .path selection works!
     replicas: `*vars.defaults.replicas`
     deployment:
-      <<: `*vars.defaults`
-      namespace: prod
+      <<: `*vars.defaults`  # Merge defaults
+      namespace: @prod@
 
-* %!load% imports the data and defines the alias-able `vars`
-* Aliases select the whole value, a key, or a nested key
-* `<<` merges the defaults; `namespace: prod` overrides `dev`
+* We can make this YAML work with 2 new ^go-yaml plugins^:
+  * go.yaml.in/yaml/v4/plugin/@aliasdata@
+  * go.yaml.in/yaml/v4/plugin/@functiontag@
 
 > vim input.yaml vars.yaml -O
+> go run main.go
+> vim main.go
 
 ----
-== Let's Run it with the new `go-yaml` CLI!
+== Make ^Custom YAML DSLs^ with @Implicit Tagging@
 
-* This is the ^Function-Tag plugin^ in go-yaml
-  * `!load` is not special. Any `!foo` can be used
-* Working together with the ^Alias-Data plugin^
+* You can do this without using `!xyz` tags!
 
-$ make cli
+  Change:
+    %!import% `vars`: vars.yaml
+  To:
+    %import% `vars`: vars.yaml
 
-$ go-yaml -C options.yaml -y input.yaml
+* The YAML-Rules plugin lets you determine tag resolution
 
-----
-== The Directive Disappears; the Data Remains
-
-all:
-  app: nginx
-  defaults:
-    namespace: dev
-    replicas: 3
-app: nginx
-deployment:
-  namespace: prod
-  replicas: 3
-replicas: 3
-
-* `!load` does its work without adding an output entry
-* `all` keeps `dev`; `deployment` inherits replicas and uses `prod`
++* I think I need to show you how YAML really works!
 
 ----
 == The YAML %Dump%/%Load% Stack (How a YAML really works)
@@ -178,44 +208,42 @@ replicas: 3
                             (Native Data Objects)
 
 ----
-== The YAML Load Stack in Action
+== go-yaml v4 has a ^New CLI^: `go-yaml`
 
-* The YAMLStar `yaml` CLI has a `-d` debug option
+$ cat vars.yaml
 
-$ yaml -d <<<'a: [b, 3, true]'
+* Convert YAML
+$ go-yaml -J vars.yaml
 
-* The go-yaml CLI also has stack inspection options
+* Show internal states
+$ go-yaml -t vars.yaml
+$ go-yaml -e vars.yaml
+$ go-yaml -N vars.yaml
+* Great for debugging YAML issues
+  * Please, ^Use the CLI to report bugs^
 
-* ^Understanding the Stack is the key to really understanding YAML^
-
-----
-== Two Plugins, One Configuration
-
-plugin:
-  alias-data:
-    path: true
-  function-tag:
-    libraries:
-      aliases: alias-data
-    functions:
-      load: aliases/load
-
-* `path: true` enables dotted alias lookups
-* `load` is a function exported by the `alias-data` library
-* The application chooses which functions YAML can call
-
-> vim options.yaml
+* Use plugins. Config with more YAML!
+$ vim options.yaml
+$ go-yaml -y --config=options.yaml input.yaml
 
 ----
-== The Same Plugins From Go
+== What you just saw…
 
-* Configure `aliasdata.New` and `functiontag.New`
-* Pass both to `yaml.Load` with `yaml.WithPlugin`
-* Load the same `input.yaml` and dump the same result
+* ^YAML's existing syntax doing new things^
 
-> vim main.go
++* %Function-Tag plugin% connects tags to Go functions
+  * We chose `!import` and the function it calls
 
-$ go run main.go
++* %Alias-Data plugin% makes imported values available through aliases
+  * Dotted paths select values; merges combine defaults and overrides
+
++* %YAML-Rules plugin% can assign tags implicitly
+  * Turn ordinary YAML into your own DSL
+
++* The same plugins work through Go and %new go-yaml CLI%
+  * Configure them in Go code or in YAML
+
++* @Your application decides what YAML means@
 
 * Now let's back up and see how we got here!
 
@@ -244,8 +272,8 @@ $ go run main.go
 * The YAML spec is huge
   * Is the spec `impossible to change`?
 
-* Many implementations are still YAML 1.1
-  * YAML 1.2 dates to 2009 (updated in 2021)
+* Many implementations are still YAML 1.1 (@2005@)
+  * YAML 1.2 dates to @2009@ (updated in @2021@)
 
 * No two implementations are fully compatible!
 
@@ -263,7 +291,7 @@ $ go run main.go
       Ruby, Python, Perl, PHP, Lua, R
 * `snakeyaml`  - 2009 - Andrey Somov     - Port of PyYAML
 * ^go-yaml    - 2014 - Gustavo Niemeyer - Port of libyaml^
-* `serde-yaml` - 2016 - David Tolnay     - Port of libyaml
+* `serde-yaml` - 2016 - David Tolnay     - Port of libyaml (Rust)
 
 * Many ported bugs:
   * https://play.yaml.com/?show=gdhflLnJPpxHUrsS#Zm9vOiB7OiBiYXJ9
@@ -277,7 +305,7 @@ $ go run main.go
 +* ^I lead maintenance^ for:
   * %The YAML Specification%
   * (Inherited) %YAML Family% core projects
-    * `go-yaml`, `PyYAML`, `libyaml`, `serde-yaml`
+    * ^go-yaml^, `PyYAML`, `libyaml`, `serde-yaml`
   * New YAML Projects
     * `YAMLScript`, `YAMLStar`, `YAMLSchema`
 
@@ -292,8 +320,8 @@ $ go run main.go
 
 * *Finishing* what we started in 2001
   * A full %YAML Platform% like the %XML Platform%
-  * Schema:    DTD,XSD -> YAMLSchema (YSD)
-  * Transform: XSLT,XPath,XQuery -> YAMLScript
+  * Schema:    DTD,XSD           -> @YAMLSchema@ (YSD)
+  * Transform: XSLT,XPath,XQuery -> @YAMLScript@
 
 ----
 == The go-yaml/yaml Project
@@ -349,11 +377,11 @@ $ go run main.go
 
 * Plugin APIs reach deep into go-yaml code
 
-+* Original code is the default plugin for an API
+* Original code is the default plugin for an API
 
-+* Each plugin API has its own configuration settings
+* Each plugin API has its own configuration settings
 
-+* Implement your own plugin for any plugin API
+* Implement your own plugin for any plugin API
 
 +* This talk is about the New go-yaml Plugin System
 
@@ -676,6 +704,8 @@ $ go-yaml --plugin=alias-data -y alias-stream.yaml
 ----
 == The End
 
+* https://github.com/yaml/go-yaml
+
 * https://ingy.net
 * https://yaml.org
 * https://yaml.blog
@@ -689,5 +719,3 @@ $ go-yaml --plugin=alias-data -y alias-stream.yaml
 * https://github.com/ingydotnet/vroom
 * https://github.com/yamlstar/yamlstar-plugin-parser-csv/blob/main/src/csv_parser/core.ys
 * https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk/blob/main/util/vroom-to-html.ys
-
-Let's Talk!!!

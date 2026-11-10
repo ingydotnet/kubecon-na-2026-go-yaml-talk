@@ -1,4 +1,4 @@
-!load vars: vars.yaml
+!import vars: vars.yaml
 
 all: *vars
 app: *vars.app

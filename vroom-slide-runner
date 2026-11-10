@@ -70,13 +70,6 @@ fi
 
 text=$(run_command </dev/tty 2>&1)
 text=$(printf '+%s\n%s' "$line" "$text")
-lines=$(perl -ne 'END { print $. }' <<<"$text")
-terminal_lines=$(tput lines)
-
-if ((lines >= terminal_lines)); then
-  printf '%s\n' "$text" | less
-else
-  printf '%s\n' "$text"
-  printf '\nE\r'
-  read -r < /dev/tty
-fi
+printf '%s\n' "$text" | less -FRX
+printf '\nE\r'
+read -r < /dev/tty

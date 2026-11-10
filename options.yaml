@@ -5,4 +5,4 @@ plugin:
     libraries:
       aliases: alias-data
     functions:
-      load: aliases/load
+      import: aliases/load

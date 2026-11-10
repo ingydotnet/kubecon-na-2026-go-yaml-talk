@@ -25,19 +25,38 @@ hi vroom_final term=bold,underline cterm=bold,underline ctermfg=231
 hi vroom_final_url term=underline cterm=underline ctermfg=LightBlue
       \ gui=underline guifg=#35c9ff
 hi vroom_bold term=bold cterm=bold gui=bold
+hi vroom_strike term=strikethrough cterm=strikethrough gui=strikethrough
 
 function! VroomHighlight()
   syn match vroom_ansi /\e\[[0-9;]*m/ conceal contained
   syn cluster vroom_spans contains=vroom_emphasis,vroom_code,vroom_comment
   syn cluster vroom_spans add=vroom_accent,vroom_emphasis_bold
   syn cluster vroom_spans add=vroom_code_bold,vroom_accent_bold
-  syn cluster vroom_spans add=vroom_bold,vroom_yellow
+  syn cluster vroom_spans add=vroom_bold,vroom_yellow,vroom_strike
   syn match vroom_command "^\s*\%(\e\[[0-9;]*m\)*[$>].*$"
-        \ contains=@vroom_spans,vroom_bold_command
+        \ contains=@vroom_spans,vroom_bold_command,vroom_strike_command
   syn match https_url "\vhttps:.*"
-        \ contains=@vroom_spans,vroom_ansi,vroom_bold_url
+        \ contains=@vroom_spans,vroom_ansi,vroom_bold_url,vroom_strike_url
   syn region vroom_bold matchgroup=vroom_ansi
         \ start=/\e\[1m/ end=/\e\[\%(1\|22\)m/ oneline concealends
+  syn region vroom_strike matchgroup=vroom_ansi
+        \ start=/\e\[9m/ end=/\e\[29m/ oneline concealends
+  " Strikethrough retains the surrounding color, weight, and underline.
+  for [context, color, hex, attributes] in [
+        \ ['command', 'Yellow', '#d7a900', 'strikethrough'],
+        \ ['url', 'LightBlue', '#35c9ff', 'strikethrough'],
+        \ ['heading', '225', '#ffafff', 'strikethrough'],
+        \ ['current', '231', '#ffffff', 'bold,strikethrough'],
+        \ ['final', '231', '#ffffff', 'bold,underline,strikethrough'],
+        \ ['final_url', 'LightBlue', '#35c9ff', 'underline,strikethrough']]
+    let group = 'vroom_strike_' . context
+    execute 'highlight ' . group . ' term=' . attributes
+          \ . ' cterm=' . attributes . ' ctermfg=' . color
+          \ . ' gui=' . attributes . ' guifg=' . hex
+    execute 'syntax region ' . group . ' matchgroup=vroom_ansi'
+          \ . ' start=/\e\[9m/ end=/\e\[29m/'
+          \ . ' oneline concealends contained'
+  endfor
   " Plain bold spans keep their surrounding color and final underline.
   for [context, color, hex, attributes] in [
         \ ['command', 'Yellow', '#d7a900', 'bold'],
@@ -88,15 +107,15 @@ function! VroomHighlight()
     endfor
   endfor
   syn match vroom_final_url /\vhttps:.*/ contained
-        \ contains=@vroom_spans,vroom_ansi,vroom_bold_final_url
+        \ contains=@vroom_spans,vroom_ansi,vroom_bold_final_url,vroom_strike_final_url
   silent! syn clear vroom_current
   syn match vroom_current /^\s*\e\[1;38;5;231m.*$/
-        \ contains=@vroom_spans,vroom_ansi,https_url,vroom_bold_current
+        \ contains=@vroom_spans,vroom_ansi,https_url,vroom_bold_current,vroom_strike_current
   silent! syn clear vroom_final
   syn match vroom_final /\e\[1;4;38;5;231m.*$/
-        \ contains=@vroom_spans,vroom_ansi,vroom_final_url,vroom_bold_final
+        \ contains=@vroom_spans,vroom_ansi,vroom_final_url,vroom_bold_final,vroom_strike_final
   syn match vroom_heading /^\s*\e\[22;38;5;225m.*$/
-        \ contains=@vroom_spans,vroom_ansi,https_url,vroom_bold_heading
+        \ contains=@vroom_spans,vroom_ansi,https_url,vroom_bold_heading,vroom_strike_heading
   setlocal conceallevel=2 concealcursor=nc
   if expand('%:t') =~# '^0\d\+[a-z]*\%(\.[[:alnum:]_-]\+\)*$'
     setlocal nowrap

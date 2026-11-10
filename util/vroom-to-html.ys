@@ -8,11 +8,11 @@ use:
 
 BLOCK-RE =: /(?m)^----[ \t]*/
 URL-RE =: /https?:\/\/[^\s<]+/
-BOLD-SPANS =: /``[^\r\n]*?``|\^\^[^\r\n]*?\^\^|%%[^\r\n]*?%%/
+DOUBLE-SPANS =: /``[^\r\n]*?``|\^\^[^\r\n]*?\^\^|%%[^\r\n]*?%%|~~[^\r\n]*?~~/
 SINGLE-SPANS =: /`[^`\r\n]*`|\^[^^\r\n]*\^|\#[^\#\r\n]*\#|%[^%\r\n]*%/
 STAR-SPAN =: /\*[^*\s\r\n](?:[^*\r\n]*[^*\s\r\n])?\*/
 YELLOW-SPAN =: /@[^@\r\n]*@/
-SPAN-RE =: qr("$BOLD-SPANS|$SINGLE-SPANS|$STAR-SPAN|$YELLOW-SPAN")
+SPAN-RE =: qr("$DOUBLE-SPANS|$SINGLE-SPANS|$STAR-SPAN|$YELLOW-SPAN")
 TEXT-RE =: qr("(.*?)($SPAN-RE)|(.*)")
 CENTER-MARK =: "\uE000"
 
@@ -165,9 +165,11 @@ defn bullet-items(rows):
                 recur: row.++, parents, items.put(index items.$index.conj(row))
               else: recur(row.++ parents items)
 
+defn span-width(piece):
+  if piece =~ /^(?:``|\^\^|%%|~~)/: 2 1
+
 defn span-body(piece):
-  bold =: piece.starts?('``') || piece.starts?('^^') || piece.starts?('%%')
-  width =: if(bold, 2, 1)
+  width =: span-width(piece)
   end =: piece.# - width
   if piece.# <= (2 * width):
     then: piece
@@ -256,7 +258,7 @@ defn page-html(config slides count):
           Space or click: next · Backspace or ←: previous
         </span>
         <span class="compact-navigation">
-          click: next
+          tap: next · double-tap:
           <button id="previous" type="button"
                   aria-label="Previous slide" title="Previous slide">
             [back]
@@ -354,19 +356,25 @@ defn render-group(group):
 
 defn render-piece(piece):
   bold =: piece.starts?('``') || piece.starts?('^^') || piece.starts?('%%')
-  width =: if(bold, 2, 1)
+  width =: span-width(piece)
   if piece.# <= (2 * width):
     then: html-escape(piece)
     else:
       end =: piece.# - width
       text =: subs(piece width end)
       cond:
+        piece.starts?('~~'): render-strike(text)
         piece.starts?('*'): render-bold(text)
         piece.starts?('`'): render-code(text bold)
         piece.starts?('#'): render-comment(text)
         piece.starts?('%'): render-accent(text bold)
         piece.starts?('@'): render-yellow(text)
         else: render-emphasis(text bold)
+
+defn render-strike(text):
+  rendered =: html-escape(text).replace(URL-RE link-url)
+  =>: |-
+    <del class="strike">$rendered</del>
 
 defn render-bold(text):
   rendered =: html-escape(text).replace(URL-RE link-url)
@@ -471,6 +479,7 @@ defn page-css(width height):
       color: #ffffaf; font-weight: normal;
     }
     .bold, .bold a { font-weight: bold; }
+    .strike { text-decoration: line-through; }
     .heading, .centered {
       padding-left: 0;
       text-align: center;
@@ -580,6 +589,14 @@ defn page-js(count):
     const counter = document.querySelector("#counter");
     const previous = document.querySelector("#previous");
     let index = 0;
+    let tapTimer = null;
+    let tapPosition = null;
+
+    function cancelTap() {
+      clearTimeout(tapTimer);
+      tapTimer = null;
+      tapPosition = null;
+    }
 
     function hashFor(frame) {
       return "#" + frame.dataset.slide + "." +
@@ -596,6 +613,7 @@ defn page-js(count):
     }
 
     function show(next, updateHash = true) {
+      cancelTap();
       index = Math.max(0, Math.min(frames.length + -1, next));
       frames.forEach((frame, position) => {
         frame.hidden = position !== index;
@@ -631,10 +649,31 @@ defn page-js(count):
 
     const tapEvent = "PointerEvent" in window ? "pointerup" : "click";
     frames.forEach(frame => frame.addEventListener(tapEvent, event => {
-      if (event.target.closest("a")) return;
+      if (event.target.closest("a")) {
+        cancelTap();
+        return;
+      }
+      if (event.isPrimary === false) return;
       if ("button" in event && event.button !== 0) return;
-      move(1);
+      if (tapEvent === "pointerup" && event.pointerType === "mouse") {
+        move(1);
+        return;
+      }
+      const position = [event.clientX, event.clientY];
+      if (tapTimer !== null) {
+        const distance = Math.hypot(position[0] - tapPosition[0],
+                                    position[1] - tapPosition[1]);
+        cancelTap();
+        if (distance <= 40) {
+          move(-1);
+          return;
+        }
+        move(1);
+      }
+      tapPosition = position;
+      tapTimer = setTimeout(() => move(1), 300);
     }));
+    addEventListener("pointercancel", cancelTap);
     previous.addEventListener("click", event => {
       event["preventDefault"]();
       event["stopPropagation"]();

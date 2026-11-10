@@ -45,6 +45,12 @@ CASES = {
         '---- center\n@one@ and @two words@\n'
         '----\n* Earlier\n+* Last @yellow@ tail\n'
     ),
+    "strikethrough": (
+        CONFIG + '----\none ~~old words~~ two ~~gone~~ tail\n'
+        '`~~literal~~`\nempty ~~~~ unmatched ~~\n'
+        '---- center\none ~~old words~~ four\n'
+        '----\n* Earlier ~~past~~\n+* Last ~~gone~~ tail\n'
+    ),
 }
 
 

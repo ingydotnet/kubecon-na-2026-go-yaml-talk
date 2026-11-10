@@ -10,7 +10,7 @@ my $html = <$fh>;
 close $fh or die "Can't close '$file': $!\n";
 # Inline styling must not change the assertions about text layout.
 my $layout_html = $html;
-$layout_html =~ s{</?(?:strong|code)\b[^>]*>}{}g;
+$layout_html =~ s{</?(?:strong|code|del)\b[^>]*>}{}g;
 $layout_html =~ s{<span class="(?:comment|accent)-span(?: bold)?">(.*?)</span>}{$1}gs;
 my $repository =
     'https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk';
@@ -88,10 +88,9 @@ check(
     'navigation instructions are visible',
 );
 check(
-    index($html, '<span class="compact-navigation">') >= 0
-        && index($html, 'click: next') >= 0
-        && index($html, '[back]') >= 0,
-    'compact navigation instructions are present',
+    scalar($html =~ m{<span\s+class="compact-navigation">\s*tap:\s+next
+        .*?double-tap:.*?\[back\].*?</span>}sx),
+    'compact navigation describes tap and double-tap',
 );
 check(
     index($html, '<button id="previous" type="button"') >= 0

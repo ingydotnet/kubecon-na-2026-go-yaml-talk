@@ -70,6 +70,12 @@ This is *important* and *so is this*.
 Ordinary `* ` bullet markers stay literal.
 Bold spans must start and end with a non-whitespace character.
 
+Wrap text in double tildes for strikethrough, keeping its surrounding color:
+
+```text
+Use ~~the old setting~~ the new setting.
+```
+
 Wrap text in carets to make it regular-weight mint green:
 
 ```text
@@ -173,6 +179,10 @@ make serve
 The server rebuilds the website whenever `slides.vroom` changes and serves it
 at <http://127.0.0.1:8000/>.
 Use `HOST` and `PORT` to override the listening address.
+
+On phones, tap once to advance or double-tap to go back one reveal.
+Single taps wait briefly to distinguish them from double taps.
+Mouse clicks, keyboard navigation, and the `[back]` button work as before.
 
 Publish the generated website to the `gh-pages` branch with:
 

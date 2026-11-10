@@ -822,6 +822,92 @@ class RunWatchTests(unittest.TestCase):
     call assert_notmatch(nr2char(27), join(getline(1, '$'), "\\n"))
 """, start='2', watch=True)
 
+    def test_strikethrough_and_surrounding_styles(self):
+        self.source.write_text(
+            deck('one ~~old words~~ two ~~gone~~ tail\n'
+                 '`~~literal~~` ^~~also literal~~^\n'
+                 'empty ~~~~ unmatched ~~\n'
+                 '$ echo ~~argument~~ after\n'
+                 'https://example.com/~~path~~\n'
+                 '== ~~Old title~~ tail')
+            + '---- center\none ~~old words~~ four\n'
+            + '----\n* Earlier ~~past~~\n+* Last ~~gone~~ tail\n'
+        )
+        self.compile()
+        content = (self.directory / '002').read_text()
+        self.assertIn('one \x1b[9mold words\x1b[29m two '
+                      '\x1b[9mgone\x1b[29m tail', content)
+        self.assertIn('~~literal~~', content)
+        self.assertIn('~~also literal~~', content)
+        self.assertIn('empty ~~~~ unmatched ~~', content)
+        centered = re.sub(r'\x1b\[[0-9;]*m', '',
+                          (self.directory / '004').read_text())
+        visible = 'one old words four'
+        self.assertIn(' ' * ((80 - len(visible)) // 2) + visible,
+                      centered.splitlines())
+        self.vim("""
+    for [word, expected] in [['old words', 'vroom_strike'],
+          \\ ['argument', 'vroom_strike_command'],
+          \\ ['path', 'vroom_strike_url'], ['Old title', 'vroom_strike_heading']]
+      let row = search(word, 'nw')
+      let column = match(getline(row), word) + 1
+      let group = synIDattr(synID(row, column, 1), 'name')
+      call assert_equal(expected, group)
+      call assert_equal('1', synIDattr(hlID(group), 'strikethrough', 'cterm'))
+    endfor
+    let row = search('old words', 'nw')
+    let column = match(getline(row), 'tail') + 1
+    let group = synIDtrans(synID(row, column, 1))
+    call assert_notequal('1', synIDattr(group, 'strikethrough', 'cterm'))
+    call assert_equal('225',
+          \\ synIDattr(hlID('vroom_strike_heading'), 'fg', 'cterm'))
+    call assert_equal(synIDattr(hlID('vroom_command'), 'fg', 'cterm'),
+          \\ synIDattr(hlID('vroom_strike_command'), 'fg', 'cterm'))
+    call assert_equal(synIDattr(hlID('https_url'), 'fg', 'cterm'),
+          \\ synIDattr(hlID('vroom_strike_url'), 'fg', 'cterm'))
+""", start='2')
+        self.vim("""
+    let row = search('past', 'nw')
+    let column = match(getline(row), 'past') + 1
+    call assert_equal('vroom_strike_current',
+          \\ synIDattr(synID(row, column, 1), 'name'))
+    normal ,
+    let row = search('gone', 'nw')
+    let column = match(getline(row), 'gone') + 1
+    let group = synIDattr(synID(row, column, 1), 'name')
+    call assert_equal('vroom_strike_final', group)
+    for attribute in ['bold', 'underline', 'strikethrough']
+      call assert_equal('1', synIDattr(hlID(group), attribute, 'cterm'))
+    endfor
+    call assert_equal('231', synIDattr(hlID(group), 'fg', 'cterm'))
+    let column = match(getline(row), 'tail') + 1
+    let group = synIDtrans(synID(row, column, 1))
+    call assert_notequal('1', synIDattr(group, 'strikethrough', 'cterm'))
+    call assert_equal('1', synIDattr(group, 'underline', 'cterm'))
+""", start='5')
+
+    def test_strikethrough_in_website(self):
+        self.source.write_text(deck(
+            'one ~~old words~~ two ~~gone~~ tail\n'
+            '`~~literal~~` ^~~also literal~~^\nempty ~~~~ unmatched ~~\n'
+            '~~https://example.com~~\n~~<b>&text</b>~~'
+        ))
+        result = subprocess.run(
+            [os.environ['VROOM_WATCH_YS'], str(ROOT / 'util/vroom-to-html.ys'),
+             'slides.vroom', 'site/index.html'],
+            cwd=self.directory, capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        html = (self.directory / 'site/index.html').read_text()
+        self.assertIn('one <del class="strike">old words</del> two '
+                      '<del class="strike">gone</del> tail', html)
+        self.assertIn('<code class="code-span">~~literal~~</code>', html)
+        self.assertIn('~~also literal~~', html)
+        self.assertIn('empty ~~~~ unmatched ~~', html)
+        self.assertIn('<del class="strike"><a href="https://example.com"', html)
+        self.assertIn('<del class="strike">&lt;b&gt;&amp;text&lt;/b&gt;</del>', html)
+        self.assertIn('.strike { text-decoration: line-through; }', html)
+
     def test_asterisk_bold_spans(self):
         self.source.write_text(
             deck('* Bullet *first* and *second* tail\n'
