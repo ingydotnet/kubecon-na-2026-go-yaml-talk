@@ -6,7 +6,10 @@ import (
 	"go.yaml.in/yaml/v4/plugin/tabindent"
 )
 func main() {
-	input, _ := os.ReadFile("tabs.yaml")
+	input, err := os.ReadFile("tabs.yaml")
+	if err != nil {
+		panic(err)
+	}
 	var value any
 	if err := yaml.Load(input, &value,
 		yaml.WithPlugin(tabindent.New())); err != nil {
@@ -14,5 +17,7 @@ func main() {
 	}
 	output := json.NewEncoder(os.Stdout)
 	output.SetIndent("", "  ")
-	if err := output.Encode(value); err != nil { panic(err) }
+	if err := output.Encode(value); err != nil {
+		panic(err)
+	}
 }

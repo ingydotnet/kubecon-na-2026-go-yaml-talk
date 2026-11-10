@@ -1,10 +1,12 @@
 package main
+
 import (
 	"os"
 	"go.yaml.in/yaml/v4"
 	"go.yaml.in/yaml/v4/plugin/aliasdata"
 	"go.yaml.in/yaml/v4/plugin/functiontag"
 )
+
 func main() {
 	aliasPlugin, _ := aliasdata.New(aliasdata.WithPath())
 	functionPlugin, _ := functiontag.New(

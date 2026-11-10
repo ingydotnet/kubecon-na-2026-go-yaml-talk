@@ -4,6 +4,7 @@ slides/
 *.html
 /.help
 /.vimrc
+/yamlet
 /[0-9][0-9][0-9]
 /[0-9][0-9][0-9][a-z]
 /go-yaml/
