@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#300a24">
+  <title>Introducing go-yaml's New Plugin System</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --columns: 82;
+      --rows: 26;
+      --background: #300a24;
+      --foreground: #f7f7f7;
+      --command: #d7a900;
+      --link: #35c9ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    main { width: 100%; height: 100%; }
+    .slide {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .slide[hidden] { display: none; }
+    pre {
+      width: calc(var(--columns) * 1ch);
+      height: calc(var(--rows) * 1.2em);
+      margin: 0;
+      font: inherit;
+      font-size: min(calc(94vw / var(--columns) * 1.65),
+                     calc(76vh / var(--rows)));
+      line-height: 1.2;
+      white-space: pre;
+    }
+    .line {
+      display: block;
+      min-height: 1.2em;
+      padding-left: calc(var(--indent) * 1ch);
+    }
+    .command { color: var(--command); }
+    .current-bullet { color: #ffffff; font-weight: bold; }
+    .last-bullet { text-decoration: underline; }
+    .heading { color: #ffafff; }
+    .emphasis, .emphasis a { color: #87ffaf; font-weight: normal; }
+    .code-span { color: #afd7ff; font: inherit; font-weight: normal; }
+    .comment-span, .comment-span a { color: #bcbcbc; font-weight: normal; }
+    .accent-span, .accent-span a { color: #ffaf87; font-weight: normal; }
+    .yellow-span, .yellow-span a {
+      color: #ffffaf; font-weight: normal;
+    }
+    .bold, .bold a { font-weight: bold; }
+    .strike { text-decoration: line-through; }
+    .heading, .centered {
+      padding-left: 0;
+      text-align: center;
+    }
+    a { color: var(--link); text-decoration: none; }
+    a:hover, a:focus { text-decoration: underline; }
+    #counter {
+      position: fixed;
+      right: 1rem;
+      bottom: .6rem;
+      color: #bdaebb;
+      font: 14px "Ubuntu Mono", monospace;
+    }
+    #navigation {
+      position: fixed;
+      left: 50%;
+      bottom: .6rem;
+      transform: translateX(-50%);
+      color: #bdaebb;
+      font: 14px "Ubuntu Mono", monospace;
+      white-space: nowrap;
+    }
+    #previous {
+      display: none;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      opacity: .8;
+    }
+    #previous:disabled { cursor: default; opacity: .25; }
+    #previous:not(:disabled):hover,
+    #previous:not(:disabled):focus { opacity: 1; }
+    #repository {
+      position: fixed;
+      left: 1rem;
+      bottom: .55rem;
+      width: 18px;
+      height: 18px;
+      color: #bdaebb;
+      opacity: .55;
+    }
+    #repository svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
+    }
+    #repository:hover, #repository:focus {
+      opacity: 1;
+      text-decoration: none;
+    }
+    .compact-navigation {
+      display: none;
+      position: relative;
+    }
+    @media (max-width: 600px),
+           (hover: none) and (pointer: coarse) and (max-width: 1000px) {
+      .slide { padding-bottom: 3rem; }
+      #navigation {
+        left: 1rem;
+        transform: none;
+        font-size: 12px;
+      }
+      #counter { font-size: 12px; }
+      #repository, .full-navigation { display: none; }
+      #previous {
+        display: inline-flex;
+        position: absolute;
+        left: calc(100% + .5rem);
+        bottom: -.6rem;
+        align-items: flex-end;
+        padding-bottom: .6rem;
+        box-sizing: border-box;
+      }
+      .compact-navigation {
+        display: inline-block;
+      }
+    }
+    @media (max-width: 600px) and (orientation: portrait) {
+      .slide { padding: 1rem 0 3rem; }
+      pre {
+        width: 92vw;
+        height: auto;
+        max-height: calc(100vh - 5rem);
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+        font-size: clamp(12px, 3vw, 15px);
+        white-space: pre-wrap;
+      }
+    }
+    @media print {
+      body { overflow: visible; }
+      .slide { break-after: page; height: 100vh; }
+      .slide[hidden] { display: grid; }
+      #counter, #navigation, #repository, #previous { display: none; }
+    }
+    
+  </style>
+</head>
+<body>
+  <main aria-live="polite">
+<section class="slide" data-slide="1" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line centered" style="--indent: 0"><strong class="emphasis">Introducing go-yaml's New Plugin System</strong></span><span class="line" style="--indent: 0"></span><span class="line centered" style="--indent: 0">Ingy döt Net</span><span class="line" style="--indent: 0"></span><span class="line centered" style="--indent: 0"><span class="accent-span">KubeCon + CloudNativeCon North America</span></span><span class="line" style="--indent: 0"></span><span class="line centered" style="--indent: 0">Salt Lake City</span><span class="line" style="--indent: 0"></span><span class="line centered" style="--indent: 0">November 11, 2026</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="0"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="1"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who uses it regularly for configuration?</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="2"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who uses it regularly for configuration?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written software that uses a YAML library?</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="3"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who uses it regularly for configuration?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written software that uses a YAML library?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written YAML libraries or tools?</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="4"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who uses it regularly for configuration?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written software that uses a YAML library?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written YAML libraries or tools?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who works for a company or on a project</span><span class="line" style="--indent: 7">that has modified or extended YAML behavior?</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="5"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who uses it regularly for configuration?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written software that uses a YAML library?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written YAML libraries or tools?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who works for a company or on a project</span><span class="line" style="--indent: 7">that has modified or extended YAML behavior?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who knows that JSON is a proper subset of YAML?</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="6"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who uses it regularly for configuration?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written software that uses a YAML library?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written YAML libraries or tools?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who works for a company or on a project</span><span class="line" style="--indent: 7">that has modified or extended YAML behavior?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who knows that JSON is a proper subset of YAML?</span><span class="line" style="--indent: 7">* Who believes that is actually true?</span></pre>
+</section>
+
+<section class="slide" data-slide="2" data-step="7"
+         data-steps="8" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Pop Quiz</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has used YAML before?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who uses it regularly for configuration?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written software that uses a YAML library?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who has written YAML libraries or tools?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who works for a company or on a project</span><span class="line" style="--indent: 7">that has modified or extended YAML behavior?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Who knows that JSON is a proper subset of YAML?</span><span class="line" style="--indent: 7">* Who believes that is actually true?</span><span class="line" style="--indent: 9">* Ingy and Wikipedia do!</span></pre>
+</section>
+
+<section class="slide" data-slide="3" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Yes, this is Vim!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* These slides are written in <strong class="emphasis">Vroom</strong></span><span class="line" style="--indent: 7">* Written in a single Markdown-ish file</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Vroom runs live demo commands:</span><span class="line command" style="--indent: 7">$ figlet --font=standard -w 90 'go-yaml Plugins!'</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Launches web pages:</span><span class="line" style="--indent: 7">* <a href="https://ingy.net" target="_blank" rel="noopener">https://ingy.net</a></span></pre>
+</section>
+
+<section class="slide" data-slide="4" data-step="0"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Let's Begin at the End!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* There's <span class="yellow-span">SOOOO MUCH COOL STUFF</span> to show you!</span></pre>
+</section>
+
+<section class="slide" data-slide="4" data-step="1"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Let's Begin at the End!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* There's <span class="yellow-span">SOOOO MUCH COOL STUFF</span> to show you!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* We will run out of time!</span></pre>
+</section>
+
+<section class="slide" data-slide="4" data-step="2"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Let's Begin at the End!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* There's <span class="yellow-span">SOOOO MUCH COOL STUFF</span> to show you!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* We will run out of time!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Let's <span class="comment-span">save</span>Show the Best <span class="comment-span">for</span>Stuff <span class="comment-span">Last</span><span class="accent-span">First</span>!</span></pre>
+</section>
+
+<section class="slide" data-slide="4" data-step="3"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Let's Begin at the End!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* There's <span class="yellow-span">SOOOO MUCH COOL STUFF</span> to show you!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* We will run out of time!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Let's <span class="comment-span">save</span>Show the Best <span class="comment-span">for</span>Stuff <span class="comment-span">Last</span><span class="accent-span">First</span>!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Buckle Up!</strong></span></pre>
+</section>
+
+<section class="slide" data-slide="5" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAML has an Anchor/Alias problem</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 7">vars: &amp;vars</span><span class="line" style="--indent: 9">app: &amp;app nginx</span><span class="line" style="--indent: 9">defaults: &amp;defaults</span><span class="line" style="--indent: 11">replicas: &amp;replicas 3</span><span class="line" style="--indent: 11">namespace: dev</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 7">all: *vars</span><span class="line" style="--indent: 7">app: *app</span><span class="line" style="--indent: 7">replicas: *replicas</span><span class="line" style="--indent: 7">deployment:</span><span class="line" style="--indent: 9">&lt;&lt;: *defaults</span><span class="line" style="--indent: 9">namespace: prod</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* We don't want <code class="code-span">vars</code> in the final result</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">$ yaml -J anchors.yaml</span></pre>
+</section>
+
+<section class="slide" data-slide="6" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Using Multiple YAML Documents Doesn't Help</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 7">---</span><span class="line" style="--indent: 7">vars: &amp;vars</span><span class="line" style="--indent: 9">app: &amp;app nginx</span><span class="line" style="--indent: 9">defaults: &amp;defaults</span><span class="line" style="--indent: 11">replicas: &amp;replicas 3</span><span class="line" style="--indent: 11">namespace: dev</span><span class="line" style="--indent: 7">---</span><span class="line" style="--indent: 7">all: *vars</span><span class="line" style="--indent: 7">app: *app</span><span class="line" style="--indent: 7">replicas: *replicas</span><span class="line" style="--indent: 7">deployment:</span><span class="line" style="--indent: 9">&lt;&lt;: *defaults</span><span class="line" style="--indent: 9">namespace: prod</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">The YAML Spec forbids cross document aliases (references)</span></span></pre>
+</section>
+
+<section class="slide" data-slide="6" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Using Multiple YAML Documents Doesn't Help</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 7">---</span><span class="line" style="--indent: 7">vars: &amp;vars</span><span class="line" style="--indent: 9">app: &amp;app nginx</span><span class="line" style="--indent: 9">defaults: &amp;defaults</span><span class="line" style="--indent: 11">replicas: &amp;replicas 3</span><span class="line" style="--indent: 11">namespace: dev</span><span class="line" style="--indent: 7">---</span><span class="line" style="--indent: 7">all: *vars</span><span class="line" style="--indent: 7">app: *app</span><span class="line" style="--indent: 7">replicas: *replicas</span><span class="line" style="--indent: 7">deployment:</span><span class="line" style="--indent: 9">&lt;&lt;: *defaults</span><span class="line" style="--indent: 9">namespace: prod</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">The YAML Spec forbids cross document aliases (references)</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* That's Dumb! Let's break the rules!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* The new go-yaml v4 AliasData plugin lets us do this and more!</span></pre>
+</section>
+
+<section class="slide" data-slide="7" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if YAML could import more YAML?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Put our variable data in a separate <code class="code-span">vars.yaml</code> file:</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 9">app: nginx</span><span class="line" style="--indent: 9">defaults:</span><span class="line" style="--indent: 11">replicas: 3</span><span class="line" style="--indent: 11">namespace: dev</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Now let's import it into our main YAML file</span></pre>
+</section>
+
+<section class="slide" data-slide="8" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Function Calls using YAML Tags</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Our main YAML file is <code class="code-span">input.yaml</code>:</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 9"><span class="accent-span">!import</span> <code class="code-span">vars</code>: vars.yaml  # Create <code class="code-span">vars</code> &quot;anchor&quot;</span><span class="line" style="--indent: 9">all: <code class="code-span">*vars</code>      # Alias to <code class="code-span">vars</code> anchor</span><span class="line" style="--indent: 9">app: <code class="code-span">*vars.app</code>  # .path selection works!</span><span class="line" style="--indent: 9">replicas: <code class="code-span">*vars.defaults.replicas</code></span><span class="line" style="--indent: 9">deployment:</span><span class="line" style="--indent: 11">&lt;&lt;: <code class="code-span">*vars.defaults</code>  # Merge defaults</span><span class="line" style="--indent: 11">namespace: <span class="yellow-span">prod</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* We can make this YAML work with 2 new <strong class="emphasis">go-yaml plugins</strong>:</span><span class="line" style="--indent: 7">* go.yaml.in/yaml/v4/plugin/<span class="yellow-span">aliasdata</span></span><span class="line" style="--indent: 7">* go.yaml.in/yaml/v4/plugin/<span class="yellow-span">functiontag</span></span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">&gt; vim input.yaml vars.yaml -O</span><span class="line command" style="--indent: 5">&gt; go run main.go</span><span class="line command" style="--indent: 5">&gt; vim main.go</span></pre>
+</section>
+
+<section class="slide" data-slide="9" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Make <strong class="emphasis">Custom YAML DSLs</strong> with <span class="yellow-span">Implicit Tagging</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* You can set up any tag for any function…</span><span class="line" style="--indent: 5">* You can do this without using tags at all!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 7">You could change:</span><span class="line" style="--indent: 9"><span class="accent-span">!import</span> <code class="code-span">vars</code>: vars.yaml</span><span class="line" style="--indent: 7">To something like this:</span><span class="line" style="--indent: 9"><span class="accent-span">import</span> <code class="code-span">vars</code>: vars.yaml</span><span class="line" style="--indent: 7">Or maybe:</span><span class="line" style="--indent: 9"><strong class="emphasis">&lt;&lt;&amp;vars</strong>: vars.yaml</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Craft your own custom YAML DSLs!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* The <strong class="emphasis">YAML-Rules</strong> plugin lets you determine <span class="yellow-span">Tag Resolution</span></span></pre>
+</section>
+
+<section class="slide" data-slide="9" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Make <strong class="emphasis">Custom YAML DSLs</strong> with <span class="yellow-span">Implicit Tagging</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* You can set up any tag for any function…</span><span class="line" style="--indent: 5">* You can do this without using tags at all!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 7">You could change:</span><span class="line" style="--indent: 9"><span class="accent-span">!import</span> <code class="code-span">vars</code>: vars.yaml</span><span class="line" style="--indent: 7">To something like this:</span><span class="line" style="--indent: 9"><span class="accent-span">import</span> <code class="code-span">vars</code>: vars.yaml</span><span class="line" style="--indent: 7">Or maybe:</span><span class="line" style="--indent: 9"><strong class="emphasis">&lt;&lt;&amp;vars</strong>: vars.yaml</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Craft your own custom YAML DSLs!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* The <strong class="emphasis">YAML-Rules</strong> plugin lets you determine <span class="yellow-span">Tag Resolution</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* I think I need to show you how YAML really works!</span></pre>
+</section>
+
+<section class="slide" data-slide="10" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The YAML <span class="accent-span">Dump</span>/<span class="accent-span">Load</span> Stack (How a YAML really works)</span><span class="line heading" style="--indent: 5"><a href="https://yaml.org/spec/1.2.2/#31-processes" target="_blank" rel="noopener">https://yaml.org/spec/1.2.2/#31-processes</a></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 19"><span class="accent-span">Loader</span>             Data State              <span class="accent-span">Dumper</span></span><span class="line" style="--indent: 14">===========================================================</span><span class="line" style="--indent: 37">(YAML Input)</span><span class="line" style="--indent: 19">Reader                                     Writer</span><span class="line" style="--indent: 32">(YAML Character Stream)</span><span class="line" style="--indent: 18">Scanner</span><span class="line" style="--indent: 34">(YAML Token Stream)</span><span class="line" style="--indent: 19"><code class="code-span">Parser</code>                                     Emitter</span><span class="line" style="--indent: 34"><strong class="emphasis">(YAML Event Stream)</strong></span><span class="line" style="--indent: 17"><code class="code-span">Composer</code>                                     Serializer</span><span class="line" style="--indent: 36">(YAML Node Tree)</span><span class="line" style="--indent: 17"><code class="code-span">Resolver</code>                                     Desolver</span><span class="line" style="--indent: 29"><strong class="emphasis">(Tagged Representation Graph)</strong></span><span class="line" style="--indent: 14"><code class="code-span">Constructor</code>                                     Representer</span><span class="line" style="--indent: 33">(Native Data Objects)</span></pre>
+</section>
+
+<section class="slide" data-slide="11" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Tag Resolution</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">$ yaml --debug &lt;&lt;&lt;'a: [b, 3, true]'</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAML adds a tag to every untagged node</span><span class="line" style="--indent: 5">* This is called Tag Resolution</span><span class="line" style="--indent: 5">* The Constructor phase uses the tag to look up a function (always)</span></pre>
+</section>
+
+<section class="slide" data-slide="11" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Tag Resolution</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">$ yaml --debug &lt;&lt;&lt;'a: [b, 3, true]'</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAML adds a tag to every untagged node</span><span class="line" style="--indent: 5">* This is called Tag Resolution</span><span class="line" style="--indent: 5">* The Constructor phase uses the tag to look up a function (always)</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">The internal state after tag resolution:</strong></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 9"><code class="code-span">!!map</code></span><span class="line" style="--indent: 9"><code class="code-span">!!str</code> &quot;a&quot;: <code class="code-span">!!seq</code> [<code class="code-span">!!str</code> &quot;b&quot;, <code class="code-span">!!int</code> &quot;3&quot;, <code class="code-span">!!bool</code> &quot;true&quot;]</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Implicitly Tagged YAML:</span><span class="line command" style="--indent: 5">$ yaml -J &lt;&lt;&lt;'a: [b, 3, true]'</span><span class="line" style="--indent: 5">* Explicitly Tagged:</span><span class="line command" style="--indent: 5">$ yaml -J &lt;&lt;&lt;'!!map {!!str &quot;a&quot;: !!seq [!!str &quot;b&quot;, !!int &quot;3&quot;, !!bool &quot;true&quot;]}'</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* We just configured our own Tag and Constructor function to make a DSL!</span></pre>
+</section>
+
+<section class="slide" data-slide="12" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">go-yaml v4 comes with a <strong class="emphasis">New CLI</strong> called '<code class="code-span">go-yaml</code>'</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">$ cat vars.yaml</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Convert YAML</span><span class="line command" style="--indent: 5">$ go-yaml -J vars.yaml</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Inspect internal Loader states:</span><span class="line command" style="--indent: 5">$ go-yaml -t vars.yaml</span><span class="line command" style="--indent: 5">$ go-yaml -e vars.yaml</span><span class="line command" style="--indent: 5">$ go-yaml -N vars.yaml</span><span class="line" style="--indent: 5">* Great for debugging YAML issues</span><span class="line" style="--indent: 7">* Please, <strong class="emphasis">Use the CLI to report bugs</strong></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Use plugins. Configure go-yaml with more YAML!</span><span class="line command" style="--indent: 5">$ vim options.yaml</span><span class="line command" style="--indent: 5">$ go-yaml -y --config=options.yaml input.yaml</span></pre>
+</section>
+
+<section class="slide" data-slide="13" data-step="0"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What you just saw…</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">YAML's existing syntax doing new things</strong></span><span class="line" style="--indent: 7">* Using optional plugins with go-yaml v4</span></pre>
+</section>
+
+<section class="slide" data-slide="13" data-step="1"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What you just saw…</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">YAML's existing syntax doing new things</strong></span><span class="line" style="--indent: 7">* Using optional plugins with go-yaml v4</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">Function-Tag plugin</span> connects tags to Go functions</span><span class="line" style="--indent: 7">* We chose <code class="code-span">!import</code> and the function it calls</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">Alias-Data plugin</span> makes imported values available through aliases</span><span class="line" style="--indent: 7">* Dotted paths select values; merges combine defaults and overrides</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">YAML-Rules plugin</span> can assign tags implicitly</span><span class="line" style="--indent: 7">* Turn ordinary YAML into your own DSL</span></pre>
+</section>
+
+<section class="slide" data-slide="13" data-step="2"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What you just saw…</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">YAML's existing syntax doing new things</strong></span><span class="line" style="--indent: 7">* Using optional plugins with go-yaml v4</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">Function-Tag plugin</span> connects tags to Go functions</span><span class="line" style="--indent: 7">* We chose <code class="code-span">!import</code> and the function it calls</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">Alias-Data plugin</span> makes imported values available through aliases</span><span class="line" style="--indent: 7">* Dotted paths select values; merges combine defaults and overrides</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">YAML-Rules plugin</span> can assign tags implicitly</span><span class="line" style="--indent: 7">* Turn ordinary YAML into your own DSL</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* The same plugins work through Go and <span class="accent-span">new go-yaml CLI</span></span><span class="line" style="--indent: 7">* Configure them in Go code or in YAML</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="yellow-span">Your application decides what YAML means</span></span></pre>
+</section>
+
+<section class="slide" data-slide="13" data-step="3"
+         data-steps="4" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What you just saw…</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">YAML's existing syntax doing new things</strong></span><span class="line" style="--indent: 7">* Using optional plugins with go-yaml v4</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">Function-Tag plugin</span> connects tags to Go functions</span><span class="line" style="--indent: 7">* We chose <code class="code-span">!import</code> and the function it calls</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">Alias-Data plugin</span> makes imported values available through aliases</span><span class="line" style="--indent: 7">* Dotted paths select values; merges combine defaults and overrides</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">YAML-Rules plugin</span> can assign tags implicitly</span><span class="line" style="--indent: 7">* Turn ordinary YAML into your own DSL</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* The same plugins work through Go and <span class="accent-span">new go-yaml CLI</span></span><span class="line" style="--indent: 7">* Configure them in Go code or in YAML</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="yellow-span">Your application decides what YAML means</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Now let's back up and see how we got here!</span></pre>
+</section>
+
+<section class="slide" data-slide="14" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAML Turned 25 This Year!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAML implementations in over <span class="accent-span">50 languages</span></span><span class="line" style="--indent: 7">* Ada, C, C++, C#, CFML, Clojure, Common Lisp, Crystal, D, Dart, Delphi,</span><span class="line" style="--indent: 9">Dyalog APL, Elixir, Erlang, F#, Fortran, <strong class="emphasis">Go</strong>, Groovy, Haskell, Haxe, Java,</span><span class="line" style="--indent: 9">JavaScript, Julia, Kotlin, Lua, ML, MoonBit, Nim, Objective-C, OCaml, Octave,</span><span class="line" style="--indent: 9">Perl, PHP, PowerShell, PureScript, Python, R, Racket, Raku, Ruby, Rust,</span><span class="line" style="--indent: 9">Scala, Scheme, Shell, Swift, Tcl, TypeScript, Typst, V, Vala, Vim, Zig</span><span class="line" style="--indent: 7">* <a href="https://yaml.org/libraries/" target="_blank" rel="noopener">https://yaml.org/libraries/</a></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Multiple implementations in most languages</span><span class="line" style="--indent: 7">* 5 implementations in <strong class="emphasis">Go</strong> :-)</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAML is used almost everywhere you look</span><span class="line" style="--indent: 7">* Kubernetes, Docker, Ansible, CI</span><span class="line" style="--indent: 7">* General configuration</span><span class="line" style="--indent: 7">* Nearly <strong class="emphasis">80% of active GitHub repos</strong> have a YAML file</span></pre>
+</section>
+
+<section class="slide" data-slide="15" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAML has some Problems</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* The YAML spec is huge</span><span class="line" style="--indent: 7">* But is it <code class="code-span">impossible to change</code>?</span><span class="line" style="--indent: 7">* Would need to be implemented in every language :\</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Many implementations are still YAML 1.1 (<span class="yellow-span">2005</span>)</span><span class="line" style="--indent: 7">* YAML 1.2 dates to <span class="yellow-span">2009</span> (updated in <span class="yellow-span">2021</span>)</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* No two YAML implementations are fully compatible :-(</span></pre>
+</section>
+
+<section class="slide" data-slide="16" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The YAML Family Tree</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Most top <span class="accent-span">YAMLs are descended from PyYAML</span> (2005)</span><span class="line" style="--indent: 7">* <span class="accent-span">NOT</span> from the spec :\</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* I call these <strong class="emphasis">The YAML Family</strong></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">PyYAML</span>     - 2005 - Kirill Simonov   - The OG YAML</span><span class="line" style="--indent: 5">* <code class="code-span">libyaml</code>    - 2006 - Kirill Simonov   - Port of PyYAML</span><span class="line" style="--indent: 7">* YAML shared library for many languages:</span><span class="line" style="--indent: 11">Ruby, Python, Perl, PHP, Lua, R</span><span class="line" style="--indent: 5">* <code class="code-span">snakeyaml</code>  - 2009 - Andrey Somov     - Port of PyYAML</span><span class="line" style="--indent: 5">* <strong class="emphasis">go-yaml    - 2014 - Gustavo Niemeyer - Port of libyaml</strong></span><span class="line" style="--indent: 5">* <code class="code-span">serde-yaml</code> - 2016 - David Tolnay     - Port of libyaml (Rust)</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Many ported bugs:</span><span class="line" style="--indent: 7">* <a href="https://play.yaml.com/?show=gdhflLnJPpxHUrsS#Zm9vOiB7OiBiYXJ9" target="_blank" rel="noopener">https://play.yaml.com/?show=gdhflLnJPpxHUrsS#Zm9vOiB7OiBiYXJ9</a></span></pre>
+</section>
+
+<section class="slide" data-slide="17" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Ingy döt Net</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">I Invented YAML</strong></span><span class="line" style="--indent: 7">* w/ Clark Evans and Oren Ben-Kiki (2001-2009).</span></pre>
+</section>
+
+<section class="slide" data-slide="17" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Ingy döt Net</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">I Invented YAML</strong></span><span class="line" style="--indent: 7">* w/ Clark Evans and Oren Ben-Kiki (2001-2009).</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">I lead maintenance</strong> for:</span><span class="line" style="--indent: 7">* <span class="accent-span">The YAML Specification</span></span><span class="line" style="--indent: 7">* (Inherited) <span class="accent-span">YAML Family</span> core projects</span><span class="line" style="--indent: 9">* <strong class="emphasis">go-yaml</strong>, <code class="code-span">PyYAML</code>, <code class="code-span">libyaml</code>, <code class="code-span">serde-yaml</code></span><span class="line" style="--indent: 7">* New YAML Projects</span><span class="line" style="--indent: 9">* <code class="code-span">YAMLScript</code>  <a href="https://yamlscript.org" target="_blank" rel="noopener">https://yamlscript.org</a></span><span class="line" style="--indent: 9">* <code class="code-span">YAMLStar</code>    <a href="https://yamlstar.org" target="_blank" rel="noopener">https://yamlstar.org</a></span><span class="line" style="--indent: 9">* <code class="code-span">YAMLSchema</code>  <a href="https://yamlschema.org" target="_blank" rel="noopener">https://yamlschema.org</a></span></pre>
+</section>
+
+<section class="slide" data-slide="18" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAML is my Passion!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* I am <strong class="bold">Making</strong> new YAML frameworks and tools</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* I'm <strong class="bold">Working</strong> with the authors of YAML frameworks and tools</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* I'm <strong class="bold">Moving</strong> the Family forward together</span><span class="line" style="--indent: 7">* <strong class="emphasis">go-yaml</strong> and <strong class="emphasis">YAMLStar</strong> lead the way</span><span class="line" style="--indent: 7">* PyYAML and Family relatives to follow</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="bold">Finishing</strong> what we started in 2001</span><span class="line" style="--indent: 7">* A full <span class="accent-span">YAML Platform</span> like the <span class="accent-span">XML Platform</span></span><span class="line" style="--indent: 7">* Schema:    DTD,XSD           -&gt; <span class="yellow-span">YAMLSchema</span> (YSD)</span><span class="line" style="--indent: 7">* Transform: XSLT,XPath,XQuery -&gt; <span class="yellow-span">YAMLScript</span></span></pre>
+</section>
+
+<section class="slide" data-slide="19" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The go-yaml/yaml Project</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">go-yaml/yaml</span> is YAML's <strong class="emphasis">most popular</strong> implementation</span><span class="line" style="--indent: 7">* ~<strong class="emphasis">80K Go projects</strong> on GitHub use go-yaml directly</span><span class="line" style="--indent: 7">* Very heavily used in the <strong class="emphasis">Kubernetes</strong> ecosystem</span><span class="line" style="--indent: 7">* Created by <strong class="emphasis">Gustavo Niemeyer</strong> in 2014</span><span class="line" style="--indent: 7">* Officially <span class="accent-span">archived April 2025</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Two main versions: <strong class="emphasis">v2</strong> and <strong class="emphasis">v3</strong></span><span class="line" style="--indent: 7">* v3 added <strong class="emphasis">comment support</strong></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">kubernetes-sigs/yaml forked</strong></span><span class="line" style="--indent: 7">* Full copies of the v2 and v3 branches' code</span><span class="line" style="--indent: 7">* A few important patches</span></pre>
+</section>
+
+<section class="slide" data-slide="20" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The yaml/go-yaml Project</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">yaml/go-yaml</strong> project started mid-April 2025</span><span class="line" style="--indent: 7">* Blessed fork of <span class="accent-span">go-yaml/yaml</span></span><span class="line" style="--indent: 7">* Formed a solid group of maintainers</span><span class="line" style="--indent: 7">* Davanum Srinivas - <strong class="emphasis">@dims++</strong></span><span class="line" style="--indent: 9">* dims <strong class="emphasis">UNFORKED</strong> the kubernetes-sigs/yaml fork on Day 1!!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">4500 projects have switched</strong> to yaml/go-yaml</span><span class="line" style="--indent: 7">* Used <span class="accent-span">in Kubernetes</span> proper</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Painless transition</strong> from v2 and v3</span><span class="line" style="--indent: 7">* No new features, only security patches</span></pre>
+</section>
+
+<section class="slide" data-slide="20" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The yaml/go-yaml Project</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">yaml/go-yaml</strong> project started mid-April 2025</span><span class="line" style="--indent: 7">* Blessed fork of <span class="accent-span">go-yaml/yaml</span></span><span class="line" style="--indent: 7">* Formed a solid group of maintainers</span><span class="line" style="--indent: 7">* Davanum Srinivas - <strong class="emphasis">@dims++</strong></span><span class="line" style="--indent: 9">* dims <strong class="emphasis">UNFORKED</strong> the kubernetes-sigs/yaml fork on Day 1!!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">4500 projects have switched</strong> to yaml/go-yaml</span><span class="line" style="--indent: 7">* Used <span class="accent-span">in Kubernetes</span> proper</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Painless transition</strong> from v2 and v3</span><span class="line" style="--indent: 7">* No new features, only security patches</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* New go-yaml <code class="code-span">v4</code> leads the <strong class="emphasis">Future of YAML</strong>!</span></pre>
+</section>
+
+<section class="slide" data-slide="21" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">go-yaml v4.0.0 Released</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">go-yaml v4.0.0 was Released last week!</strong></span><span class="line" style="--indent: 5">* Painless migration from v2 or v3 for most users</span><span class="line" style="--indent: 5">* Already used by over 100 repos!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* New &quot;With&quot;-style options system</span><span class="line" style="--indent: 7">* WithV2Defaults() and WithV3Defaults() option groups</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Shout out to the <strong class="emphasis">go-yaml dev team</strong>!</span><span class="line" style="--indent: 7">* Especially Christophe Colombier <strong class="emphasis">@ccoVeille</strong>!!</span><span class="line" style="--indent: 7">* Also <span class="accent-span">Colin Lacy</span> and <span class="accent-span">dims</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">v4 Plugin system can take YAML to new places</strong></span></pre>
+</section>
+
+<section class="slide" data-slide="22" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The go-yaml v4 Plugin System</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Plugin APIs reach deep into go-yaml code</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Original code becomes the default plugin for an API</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Each plugin has its own configuration settings</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* You can implement your own plugin module for any API</span></pre>
+</section>
+
+<section class="slide" data-slide="22" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The go-yaml v4 Plugin System</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Plugin APIs reach deep into go-yaml code</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Original code becomes the default plugin for an API</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Each plugin has its own configuration settings</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* You can implement your own plugin module for any API</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* This talk is about the New go-yaml Plugin System</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 7">* But first...</span></pre>
+</section>
+
+<section class="slide" data-slide="23" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Let's imagine the future of YAML!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 10">__        ___           _     _  __  __   __ _    __  __ _               ___</span><span class="line" style="--indent: 10">\ \      / / |__   __ _| |_  (_)/ _| \ \ / // \  |  \/  | |             |__ \</span><span class="line" style="--indent: 11">\ \ /\ / /| '_ \ / _` | __| | | |_   \ V // _ \ | |\/| | |               / /</span><span class="line" style="--indent: 12">\ V  V / | | | | (_| | |_  | |  _|   | |/ ___ \| |  | | |___           |_|</span><span class="line" style="--indent: 13">\_/\_/  |_| |_|\__,_|\__| |_|_|     |_/_/   \_\_|  |_|_____|  _____   (_)</span><span class="line" style="--indent: 74">|_____|</span></pre>
+</section>
+
+<section class="slide" data-slide="24" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if YAML were Fully Programmable?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Introducing YAMLScript (YS)</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Lets any YAML data be code</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <a href="https://yamlscript.org" target="_blank" rel="noopener">https://yamlscript.org</a></span></pre>
+</section>
+
+<section class="slide" data-slide="25" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Python Data as Config</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">You _could_ use Python code as a config language…</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5"># A Python config program, using only data syntax:</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">{</span><span class="line" style="--indent: 9">&quot;service&quot;: &quot;yaml-api&quot;,</span><span class="line" style="--indent: 9">&quot;host&quot;: &quot;127.0.0.1&quot;,</span><span class="line" style="--indent: 9">&quot;port&quot;: 8080,</span><span class="line" style="--indent: 9">&quot;debug&quot;: False,</span><span class="line" style="--indent: 9">&quot;workers&quot;: 4,</span><span class="line" style="--indent: 9">&quot;allowed_origins&quot;: [&quot;<a href="https://example.com&quot;]," target="_blank" rel="noopener">https://example.com&quot;],</a></span><span class="line" style="--indent: 5">}</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Show as JSON</span><span class="line command" style="--indent: 5">$ python -c 'import json;print(json.dumps(eval(open(&quot;config-1.py&quot;).read())))' | jq .</span></pre>
+</section>
+
+<section class="slide" data-slide="26" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAMLScript == Dynamic Python as Config</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5"># Same thing using code to calculate some data values:</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">{</span><span class="line" style="--indent: 9">&quot;service&quot;: &quot;yaml-api&quot;,</span><span class="line" style="--indent: 9">&quot;host&quot;: &quot;.&quot;.join([&quot;127&quot;, &quot;0&quot;, &quot;0&quot;, &quot;1&quot;]),</span><span class="line" style="--indent: 9">&quot;port&quot;: 8000 + 80,</span><span class="line" style="--indent: 9">&quot;debug&quot;: 1 &gt; 2,</span><span class="line" style="--indent: 9">&quot;workers&quot;: 2 * 2,</span><span class="line" style="--indent: 9">&quot;allowed_origins&quot;: [&quot;<a href="https://example.com&quot;]," target="_blank" rel="noopener">https://example.com&quot;],</a></span><span class="line" style="--indent: 5">}</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">$ python -c 'import json;print(json.dumps(eval(open(&quot;config-1.py&quot;).read())))' | jq .</span></pre>
+</section>
+
+<section class="slide" data-slide="27" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Dynamic YAML as Config</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5"># Same thing as Python, but the code is YAML:</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 9">!ys-0:</span><span class="line" style="--indent: 9">service: yaml-api</span><span class="line" style="--indent: 9">host:: +[127 0 0 1].join('.')</span><span class="line" style="--indent: 9">port:: 8000 + 80</span><span class="line" style="--indent: 9">debug:: 1 &gt; 2</span><span class="line" style="--indent: 9">workers:: 2 * 2</span><span class="line" style="--indent: 9">allowed_origins: [<a href="https://example.com]" target="_blank" rel="noopener">https://example.com]</a></span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">$ ys -J sample.yaml</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <code class="code-span">::</code> means value is a code expression</span></pre>
+</section>
+
+<section class="slide" data-slide="28" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if YAML were a <span class="yellow-span">Complete Programming Language</span> like Python?!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YS can make YAML dynamic</span><span class="line" style="--indent: 5">* It's also a complete language like Python</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">I wrote a &quot;figlet&quot; in YS called `yamlet.ys` (under 200 lines</strong>)</span><span class="line" style="--indent: 7">* It reads FIGlet font files</span><span class="line" style="--indent: 7">* It centers the output and prints in bright yellow</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">&gt; ys yamlet.ys -f standard 'What if YAML _ ?'</span><span class="line command" style="--indent: 5">&gt; vim yamlet.ys</span></pre>
+</section>
+
+<section class="slide" data-slide="28" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if YAML were a <span class="yellow-span">Complete Programming Language</span> like Python?!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YS can make YAML dynamic</span><span class="line" style="--indent: 5">* It's also a complete language like Python</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">I wrote a &quot;figlet&quot; in YS called `yamlet.ys` (under 200 lines</strong>)</span><span class="line" style="--indent: 7">* It reads FIGlet font files</span><span class="line" style="--indent: 7">* It centers the output and prints in bright yellow</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">&gt; ys yamlet.ys -f standard 'What if YAML _ ?'</span><span class="line command" style="--indent: 5">&gt; vim yamlet.ys</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* All YAMLScript is 100% valid YAML!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">My</strong> <span class="yellow-span">Codex AI Agent</span> <strong class="emphasis">actually wrote yamlet.ys</strong></span><span class="line" style="--indent: 7">* yamlscript.org has a <span class="accent-span">Great YAMLScript Skill</span> for agents</span><span class="line" style="--indent: 7">* It works every time</span><span class="line" style="--indent: 7">* Writes YS code almost a good as Ingy! :-)</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">I write all my automation scripts in YS now</strong></span></pre>
+</section>
+
+<section class="slide" data-slide="29" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">This talk's online slideshow is written in YS</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <a href="https://ingydotnet.github.io/kubecon-na-2026-go-yaml-talk/" target="_blank" rel="noopener">https://ingydotnet.github.io/kubecon-na-2026-go-yaml-talk/</a></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* A YS program called <code class="code-span">vroom-to-html.ys</code> creates the web app!</span><span class="line" style="--indent: 5">* <a href="https://raw.githubusercontent.com/ingydotnet/kubecon-na-2026-go-yaml-talk/refs/heads/main/util/vroom-to-html.ys" target="_blank" rel="noopener">https://raw.githubusercontent.com/ingydotnet/kubecon-na-2026-go-yaml-talk/refs/heads/main/util/vroom-to-html.ys</a></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLSchema is a new Schema language for YAML</span><span class="line" style="--indent: 7">* <a href="https://yamlschema.org" target="_blank" rel="noopener">https://yamlschema.org</a></span><span class="line" style="--indent: 7">* Roundtrips with JSON Schema perfectly</span><span class="line" style="--indent: 7">* The <code class="code-span">ysd</code> CLI is written in YS</span><span class="line" style="--indent: 7">* <strong class="emphasis">Same YS code</strong> drives the Wasm website demos!</span></pre>
+</section>
+
+<section class="slide" data-slide="30" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if YS compiled to native executables?</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">&gt; ys --to=bin yamlet.ys   # compile to yamlet</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">&gt; file yamlet</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">&gt; ./yamlet 'Try that, Python!'</span></pre>
+</section>
+
+<section class="slide" data-slide="31" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if YAML/YS actually compiled to Go code?!?!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLScript compiles to <strong class="emphasis">Clojure</strong> (a Lisp)</span><span class="line" style="--indent: 5">* There's a new Clojure dialect for Go called <strong class="emphasis">Glojure</strong></span><span class="line" style="--indent: 5">* Glojure compiles Clojure to <strong class="emphasis">Go</strong></span><span class="line" style="--indent: 5">* Go (cross-)compiles to <strong class="emphasis">Everything</strong>!</span><span class="line" style="--indent: 7">* WebAssembly (Browser &amp; WASI)</span><span class="line" style="--indent: 7">* Native binaries</span><span class="line" style="--indent: 7">* Native shared libraries</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Check out Gloat!</span><span class="line" style="--indent: 7">* <strong class="emphasis">GLO</strong>jure <strong class="emphasis">A</strong>utomation <strong class="emphasis">T</strong>ool</span><span class="line" style="--indent: 7">* Simple compilation of YS/Clojure -&gt; Go</span><span class="line" style="--indent: 7">* <code class="code-span">ys --to=bin ...</code> uses it</span><span class="line" style="--indent: 7">* <a href="https://gloathub.org/" target="_blank" rel="noopener">https://gloathub.org/</a></span></pre>
+</section>
+
+<section class="slide" data-slide="32" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if <strong class="emphasis">Kubernetes</strong> were rewritten in YAML?!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">LOL</span>!!!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Technically it might be possible!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">YAMLScript IS a new way to write Go code!</strong></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Try it out for your Kubernetes projects :-)</span><span class="line" style="--indent: 7">* Let me know</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLScript also can be used to write Java!</span></pre>
+</section>
+
+<section class="slide" data-slide="33" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if there was a <span class="yellow-span">100% Compatible YAML Library</span> for every language?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Full featured</span><span class="line" style="--indent: 5">* Same in every language</span><span class="line" style="--indent: 7">* Same API</span><span class="line" style="--indent: 7">* Same features</span><span class="line" style="--indent: 7">* Same bugs</span><span class="line" style="--indent: 7">* Same fixes</span></pre>
+</section>
+
+<section class="slide" data-slide="34" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Introducing YAMLStar</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <a href="https://yamlstar.org" target="_blank" rel="noopener">https://yamlstar.org</a></span><span class="line" style="--indent: 7">* A YAML framework for 32 programming languages (so far!)</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLStar works the same in every language</span><span class="line" style="--indent: 7">* Same API, same features, same bugs, same fixes</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLStar ALSO has a <strong class="emphasis">Plugin System</strong>!</span><span class="line" style="--indent: 7">* Same plugins for all languages</span><span class="line" style="--indent: 7">* <strong class="emphasis">Most plugins are shared with go-yaml!!</strong></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Has a CLI called &quot;yaml&quot;, very similar to the &quot;go-yaml&quot; CLI</span><span class="line command" style="--indent: 7">$ go-yaml -J &lt;&lt;&lt;'a: [ok, 1, 2.3, true, null]'</span><span class="line command" style="--indent: 7">$ yaml    -J &lt;&lt;&lt;'a: [ok, 1, 2.3, true, null]'</span></pre>
+</section>
+
+<section class="slide" data-slide="35" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAMLStar -&gt; New YAML Spec!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAML 1.2 dates to 2009</span><span class="line" style="--indent: 7">* Many YAMLs are still at 1.1</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLStar has plugins</span><span class="line" style="--indent: 7">* Plugins let us try new things</span><span class="line" style="--indent: 7">* go-yaml has many of the same plugins!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Popular new ideas become part of the next spec</strong></span><span class="line" style="--indent: 7">* Implementations in every language</span><span class="line" style="--indent: 7">* Before the spec is published!</span><span class="line" style="--indent: 7">* YAMLStar and <span class="accent-span">go-yaml plugins are the key to YAML 1.3!</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLStar is how we get to <span class="accent-span">YAML 1.3</span> (or 2.0)!</span><span class="line" style="--indent: 7">* Working <strong class="emphasis">implementations in every language</strong> <strong class="bold">before</strong> release!</span><span class="line" style="--indent: 7">* Plugins let us <strong class="emphasis">experiment with new ideas</strong> in YAML 1.2…</span><span class="line" style="--indent: 9">before deciding what goes into the next YAML spec!</span></pre>
+</section>
+
+<section class="slide" data-slide="35" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAMLStar -&gt; New YAML Spec!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAML 1.2 dates to 2009</span><span class="line" style="--indent: 7">* Many YAMLs are still at 1.1</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLStar has plugins</span><span class="line" style="--indent: 7">* Plugins let us try new things</span><span class="line" style="--indent: 7">* go-yaml has many of the same plugins!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Popular new ideas become part of the next spec</strong></span><span class="line" style="--indent: 7">* Implementations in every language</span><span class="line" style="--indent: 7">* Before the spec is published!</span><span class="line" style="--indent: 7">* YAMLStar and <span class="accent-span">go-yaml plugins are the key to YAML 1.3!</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* YAMLStar is how we get to <span class="accent-span">YAML 1.3</span> (or 2.0)!</span><span class="line" style="--indent: 7">* Working <strong class="emphasis">implementations in every language</strong> <strong class="bold">before</strong> release!</span><span class="line" style="--indent: 7">* Plugins let us <strong class="emphasis">experiment with new ideas</strong> in YAML 1.2…</span><span class="line" style="--indent: 9">before deciding what goes into the next YAML spec!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">Back to go-yaml Plugins!</span></span></pre>
+</section>
+
+<section class="slide" data-slide="36" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if YAML supported tab indentation?</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">$ cat tabs.yaml</span><span class="line command" style="--indent: 5">$ sed 's/\t/=&gt;/g' tabs.yaml  # Prove really tabs!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Works in both YAMLStar and go-yaml!</strong></span><span class="line command" style="--indent: 5">$ yaml    -J --plugin=tab-indent tabs.yaml</span><span class="line command" style="--indent: 5">$ go-yaml -J --plugin=tab-indent tabs.yaml</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* And in Go code, of course:</span><span class="line command" style="--indent: 5">$ vim tabs.go</span><span class="line command" style="--indent: 5">$ go run tabs.go</span></pre>
+</section>
+
+<section class="slide" data-slide="37" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">What if you could write <strong class="emphasis">go-yaml plugins in YS</strong>?</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <span class="accent-span">YS is Go</span>. Should be easy!</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* We can swap out <span class="accent-span">the entire Parser</span> for go-yaml</span><span class="line" style="--indent: 7">* With the <code class="code-span">YAML-Parser</code> plugin API</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">There is already 7 current parser plugins:</strong></span><span class="line" style="--indent: 7">go-yaml       - Native Go parser (default for go-yaml &amp; YAMLStar)</span><span class="line" style="--indent: 7">reference     - YAML reference grammar parser</span><span class="line" style="--indent: 7">snakeyaml     - Java's SnakeYAML Engine parser</span><span class="line" style="--indent: 7">rapidyaml     - C++ RapidYAML parser</span><span class="line" style="--indent: 7">json-comments - YAML parser supporting C-style comments</span><span class="line" style="--indent: 7"><span class="accent-span">toml          - Parse TOML to YAML events</span></span><span class="line" style="--indent: 7"><strong class="emphasis">csv           - Parse CSV/TSV to YAML events</strong></span></pre>
+</section>
+
+<section class="slide" data-slide="38" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">yamlstar-plugin-parser-csv</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* I wrote a <strong class="emphasis">CSV/TSV</strong> parser plugin for go-yaml</span><span class="line" style="--indent: 7">* <span class="accent-span">In YAMLScript!</span></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <a href="https://raw.githubusercontent.com/yamlstar/yamlstar-plugin-parser-csv/refs/heads/main/src/csv_parser/core.ys" target="_blank" rel="noopener">https://raw.githubusercontent.com/yamlstar/yamlstar-plugin-parser-csv/refs/heads/main/src/csv_parser/core.ys</a></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* A CSV file:</span><span class="line command" style="--indent: 5">$ cat data.csv</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Need to build the go-yaml CLI with it:</span><span class="line command" style="--indent: 5">$ make -C repos/go-yaml cli PLUGIN-PACKAGE=github.com/yamlstar/yamlstar-plugin-parser-csv/goyaml@v0.1.0</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Try it out:</span><span class="line command" style="--indent: 5">$ go-yaml -J --plugin=yaml-parser=csv data.csv</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* Parses CSV to go-yaml Event structs:</span><span class="line command" style="--indent: 5">$ go-yaml -e --plugin=yaml-parser=csv data.csv</span></pre>
+</section>
+
+<section class="slide" data-slide="39" data-step="0"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAML Plugin APIs</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Alias-Data</strong>      - Powerful aliasing</span><span class="line" style="--indent: 5">* Allowed-Bugs    - Choose which fixed bugs to retain</span><span class="line" style="--indent: 5">* Comment-Model   - Better comment loading</span><span class="line" style="--indent: 5">* <strong class="emphasis">Error-Format</strong>    - Custom error formatting</span><span class="line" style="--indent: 5">* <strong class="emphasis">Function-Tag</strong>    - Define your own function calls: <code class="code-span">!import vars: vars.yaml</code></span><span class="line" style="--indent: 5">* L10N-Keys       - YAML keys in French or Chinese</span><span class="line" style="--indent: 5">* <strong class="emphasis">Loader-Limits</strong>   - Custom resource limits</span><span class="line" style="--indent: 5">* Merge-Key       - Custom <code class="code-span">&lt;&lt;</code> merge key behavior</span><span class="line" style="--indent: 5">* Multi-Tag       - Multiple tags <code class="code-span">!!foo;bar</code></span><span class="line" style="--indent: 5">* Stream-Tag      - <code class="code-span">!!yaml:helm.sh/v4</code></span><span class="line" style="--indent: 5">* String-Expand   - Alias/Reference/Variable/Expression Interpolation</span><span class="line" style="--indent: 5">* <strong class="emphasis">Tab-Indent</strong>      - Use tabs for YAML indentation</span><span class="line" style="--indent: 5">* YAML-Format     - Completely custom YAML formatting</span><span class="line" style="--indent: 5">* <strong class="emphasis">YAML-Parser</strong>     - Use an alternate YAML parser</span><span class="line" style="--indent: 5">* <span class="accent-span">YAML-Rules</span>      - Use <code class="code-span">oui</code> and <code class="code-span">non</code> for <code class="code-span">true</code> and <code class="code-span">false</code></span><span class="line" style="--indent: 5">* YAML-Schema     - Schema validation and association</span></pre>
+</section>
+
+<section class="slide" data-slide="39" data-step="1"
+         data-steps="2" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">YAML Plugin APIs</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <strong class="emphasis">Alias-Data</strong>      - Powerful aliasing</span><span class="line" style="--indent: 5">* Allowed-Bugs    - Choose which fixed bugs to retain</span><span class="line" style="--indent: 5">* Comment-Model   - Better comment loading</span><span class="line" style="--indent: 5">* <strong class="emphasis">Error-Format</strong>    - Custom error formatting</span><span class="line" style="--indent: 5">* <strong class="emphasis">Function-Tag</strong>    - Define your own function calls: <code class="code-span">!import vars: vars.yaml</code></span><span class="line" style="--indent: 5">* L10N-Keys       - YAML keys in French or Chinese</span><span class="line" style="--indent: 5">* <strong class="emphasis">Loader-Limits</strong>   - Custom resource limits</span><span class="line" style="--indent: 5">* Merge-Key       - Custom <code class="code-span">&lt;&lt;</code> merge key behavior</span><span class="line" style="--indent: 5">* Multi-Tag       - Multiple tags <code class="code-span">!!foo;bar</code></span><span class="line" style="--indent: 5">* Stream-Tag      - <code class="code-span">!!yaml:helm.sh/v4</code></span><span class="line" style="--indent: 5">* String-Expand   - Alias/Reference/Variable/Expression Interpolation</span><span class="line" style="--indent: 5">* <strong class="emphasis">Tab-Indent</strong>      - Use tabs for YAML indentation</span><span class="line" style="--indent: 5">* YAML-Format     - Completely custom YAML formatting</span><span class="line" style="--indent: 5">* <strong class="emphasis">YAML-Parser</strong>     - Use an alternate YAML parser</span><span class="line" style="--indent: 5">* <span class="accent-span">YAML-Rules</span>      - Use <code class="code-span">oui</code> and <code class="code-span">non</code> for <code class="code-span">true</code> and <code class="code-span">false</code></span><span class="line" style="--indent: 5">* YAML-Schema     - Schema validation and association</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* That's all I have for you today…</span></pre>
+</section>
+
+<section class="slide" data-slide="40" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">Questions?!</span><span class="line" style="--indent: 0"></span><span class="line command" style="--indent: 5">&gt; ./yamlet 'Questions?!'</span></pre>
+</section>
+
+<section class="slide" data-slide="41" data-step="0"
+         data-steps="1" hidden>
+  <pre><span class="line" style="--indent: 0"></span><span class="line heading" style="--indent: 5">The End</span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <a href="https://github.com/yaml/go-yaml" target="_blank" rel="noopener">https://github.com/yaml/go-yaml</a></span><span class="line" style="--indent: 5">* <a href="https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk" target="_blank" rel="noopener">https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk</a></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <a href="https://ingy.net" target="_blank" rel="noopener">https://ingy.net</a></span><span class="line" style="--indent: 5">* <a href="https://yaml.org" target="_blank" rel="noopener">https://yaml.org</a></span><span class="line" style="--indent: 5">* <a href="https://yaml.blog" target="_blank" rel="noopener">https://yaml.blog</a></span><span class="line" style="--indent: 5">* <a href="https://play.yaml.com" target="_blank" rel="noopener">https://play.yaml.com</a></span><span class="line" style="--indent: 5">* <a href="https://yamlscript.org" target="_blank" rel="noopener">https://yamlscript.org</a></span><span class="line" style="--indent: 5">* <a href="https://yamlstar.org" target="_blank" rel="noopener">https://yamlstar.org</a></span><span class="line" style="--indent: 5">* <a href="https://yamlschema.org" target="_blank" rel="noopener">https://yamlschema.org</a></span><span class="line" style="--indent: 5">* <a href="https://gloathub.org/" target="_blank" rel="noopener">https://gloathub.org/</a></span><span class="line" style="--indent: 0"></span><span class="line" style="--indent: 5">* <a href="https://yaml.org/spec/1.2.2/#31-processes" target="_blank" rel="noopener">https://yaml.org/spec/1.2.2/#31-processes</a></span><span class="line" style="--indent: 5">* <a href="https://github.com/ingydotnet/vroom" target="_blank" rel="noopener">https://github.com/ingydotnet/vroom</a></span><span class="line" style="--indent: 5">* <a href="https://github.com/yamlstar/yamlstar-plugin-parser-csv/blob/main/src/csv_parser/core.ys" target="_blank" rel="noopener">https://github.com/yamlstar/yamlstar-plugin-parser-csv/blob/main/src/csv_parser/core.ys</a></span><span class="line" style="--indent: 5">* <a href="https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk/blob/main/util/vroom-to-html.ys" target="_blank" rel="noopener">https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk/blob/main/util/vroom-to-html.ys</a></span></pre>
+</section>
+
+  </main>
+  <aside id="navigation" aria-label="Slideshow controls">
+    <span class="full-navigation">
+      Space or click: next · Backspace or ←: previous
+    </span>
+    <span class="compact-navigation">
+      tap: next · double-tap:
+      <button id="previous" type="button"
+              aria-label="Previous slide" title="Previous slide">
+        [back]
+      </button>
+    </span>
+  </aside>
+  <a id="repository"
+     href="https://github.com/ingydotnet/kubecon-na-2026-go-yaml-talk"
+     target="_blank" rel="noopener"
+     aria-label="View this talk on GitHub"
+     title="View this talk on GitHub">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53
+               5.47 7.59.4.07.55-.17.55-.38
+               0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49
+               -2.69-.94-.09-.23-.48-.94-.82-1.13
+               -.28-.15-.68-.52-.01-.53.63-.01 1.08.58
+               1.23.82.72 1.21 1.87.87 2.33.66.07-.52
+               .28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+               0-.87.31-1.59.82-2.15-.08-.2-.36-1.02
+               .08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1
+               8 3.55c.68 0 1.36.09 2 .26 1.53-1.04
+               2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+               .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75
+               -3.65 3.95.29.25.54.73.54 1.48
+               0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38
+               A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+    </svg>
+  </a>
+  <output id="counter" aria-label="Slide number"></output>
+  <script>
+    "use strict";
+    const frames = [...document.querySelectorAll(".slide")];
+    const counter = document.querySelector("#counter");
+    const previous = document.querySelector("#previous");
+    let index = 0;
+    let tapTimer = null;
+    let tapPosition = null;
+    
+    function cancelTap() {
+      clearTimeout(tapTimer);
+      tapTimer = null;
+      tapPosition = null;
+    }
+    
+    function hashFor(frame) {
+      return "#" + frame.dataset.slide + "." +
+        (Number(frame.dataset.step) + 1);
+    }
+    
+    function indexFromHash() {
+      const match = location.hash.match(/^#(\d+)\.(\d+)$/);
+      if (!match) return 0;
+      const found = frames.findIndex(frame =>
+        frame.dataset.slide === match[1] &&
+        Number(frame.dataset.step) + 1 === Number(match[2]));
+      return found < 0 ? 0 : found;
+    }
+    
+    function show(next, updateHash = true) {
+      cancelTap();
+      index = Math.max(0, Math.min(frames.length + -1, next));
+      frames.forEach((frame, position) => {
+        frame.hidden = position !== index;
+      });
+      const frame = frames[index];
+      counter.value = frame.dataset.slide + " / 41";
+      previous.disabled = index === 0;
+      if (updateHash && location.hash !== hashFor(frame)) {
+        history.replaceState(null, "", hashFor(frame));
+      }
+    }
+    
+    function move(amount) { show(index + amount); }
+    
+    addEventListener("keydown", event => {
+      const forward = [" ", "Enter", "ArrowRight", "ArrowDown",
+                       "PageDown"];
+      const backward = ["Backspace", "ArrowLeft", "ArrowUp", "PageUp"];
+      if (forward.includes(event.key)) {
+        event["preventDefault"]();
+        move(1);
+      } else if (backward.includes(event.key)) {
+        event["preventDefault"]();
+        move(-1);
+      } else if (event.key === "Home") {
+        event["preventDefault"]();
+        show(0);
+      } else if (event.key === "End") {
+        event["preventDefault"]();
+        show(frames.length + -1);
+      }
+    });
+    
+    const tapEvent = "PointerEvent" in window ? "pointerup" : "click";
+    frames.forEach(frame => frame.addEventListener(tapEvent, event => {
+      if (event.target.closest("a")) {
+        cancelTap();
+        return;
+      }
+      if (event.isPrimary === false) return;
+      if ("button" in event && event.button !== 0) return;
+      if (tapEvent === "pointerup" && event.pointerType === "mouse") {
+        move(1);
+        return;
+      }
+      const position = [event.clientX, event.clientY];
+      if (tapTimer !== null) {
+        const distance = Math.hypot(position[0] - tapPosition[0],
+                                    position[1] - tapPosition[1]);
+        cancelTap();
+        if (distance <= 40) {
+          move(-1);
+          return;
+        }
+        move(1);
+      }
+      tapPosition = position;
+      tapTimer = setTimeout(() => move(1), 300);
+    }));
+    addEventListener("pointercancel", cancelTap);
+    previous.addEventListener("click", event => {
+      event["preventDefault"]();
+      event["stopPropagation"]();
+      move(-1);
+    });
+    addEventListener("hashchange", () => show(indexFromHash(), false));
+    show(indexFromHash());
+    
+  </script>
+</body>
+</html>
